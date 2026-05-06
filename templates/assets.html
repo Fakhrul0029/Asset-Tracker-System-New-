@@ -1,0 +1,107 @@
+<assets html>
+<html>
+<head>
+    <title>ASSETS TRACKING - Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        .stat-card { padding: 20px; border-radius: 8px; color: white; text-align: center; font-weight: bold; }
+        .bg-black { background: #212529; } .bg-green { background: #198754; } 
+        .bg-yellow { background: #ffc107; color: #212529 !important; } .bg-red { background: #dc3545; }
+    </style>
+</head>
+<body class="p-5 bg-light">
+    <div class="container bg-white p-4 rounded shadow">
+        <div class="d-flex justify-content-between align-items-center">
+            <h3 class="fw-bold">ASSETS TRACKING</h3>
+            <div>
+                <a href="/export" class="btn btn-success btn-sm">📊 Export CSV</a>
+                <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
+                <a href="/add" class="btn btn-primary btn-sm">+ Add Hardware</a>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col"><div class="stat-card bg-black">Total: {{ total }}</div></div>
+            <div class="col"><div class="stat-card bg-green">Working: {{ working }}</div></div>
+            <div class="col"><div class="stat-card bg-yellow">Maintenance: {{ maintenance }}</div></div>
+            <div class="col"><div class="stat-card bg-red">Faulty: {{ faulty }}</div></div>
+        </div>
+
+        <!-- NEW SEARCH AND FILTER HUB -->
+        <div class="row mt-4 g-2">
+            <div class="col-md-8">
+                <input type="text" id="liveSearch" class="form-control" placeholder="Live search by Serial, Name, or Location...">
+            </div>
+            <div class="col-md-4">
+                <select id="typeFilter" class="form-select">
+                    <option value="">All Categories</option>
+                    <option value="Laptop">Laptops</option>
+                    <option value="PC">PCs</option>
+                    <option value="Monitor">Monitors</option>
+                    <option value="Printer">Printers</option>
+                </select>
+            </div>
+        </div>
+
+        <table class="table mt-3 table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Type</th>
+                    <th>CPU Name</th>
+                    <th>S/N</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="assetTable">
+                {% for row in data %}
+                <tr data-type="{{ row.asset_type }}">
+                    <td><span class="badge bg-secondary text-uppercase">{{ row.asset_type }}</span></td>
+                    <td>{{ row.cpu_name }}</td>
+                    <td><code>{{ row.serial_number }}</code></td>
+                    <td>
+                        <span class="badge 
+                            {% if row.status == 'Working' %}bg-success
+                            {% elif row.status == 'Maintenance' %}bg-warning text-dark
+                            {% else %}bg-danger{% endif %}">
+                            {{ row.status }}
+                        </span>
+                    </td>
+                    <td>{{ row.location }}</td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <a href="/asset/{{ row.id }}" class="btn btn-sm btn-info">View</a>
+                            <a href="/edit/{{ row.id }}" class="btn btn-sm btn-warning">Edit</a>
+                            <form action="/delete/{{ row.id }}" method="POST" onsubmit="return confirm('Delete permanently?');">
+                                <button type="submit" class="btn btn-sm btn-danger">Del</button>
+                            </form>
+                            <a href="/qr/{{ row.id }}" class="btn btn-sm btn-dark">QR</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        $(document).ready(function(){
+            function multiFilter() {
+                var searchText = $("#liveSearch").val().toLowerCase();
+                var filterType = $("#typeFilter").val().toLowerCase();
+
+                $("#assetTable tr").filter(function() {
+                    var textMatch = $(this).text().toLowerCase().indexOf(searchText) > -1;
+                    var typeMatch = filterType === "" || $(this).attr("data-type").toLowerCase() === filterType;
+                    $(this).toggle(textMatch && typeMatch);
+                });
+            }
+
+            $("#liveSearch").on("keyup", multiFilter);
+            $("#typeFilter").on("change", multiFilter);
+        });
+    </script>
+</body>
+</html>
