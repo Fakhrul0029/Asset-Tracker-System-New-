@@ -91,6 +91,7 @@ init_db()
 # LOG FUNCTION
 # =========================
 def log_action(email, action, serial):
+
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -100,6 +101,7 @@ def log_action(email, action, serial):
     """, (email, action, serial))
 
     conn.commit()
+
     cur.close()
     conn.close()
 
@@ -108,9 +110,13 @@ def log_action(email, action, serial):
 # QR GENERATOR
 # =========================
 def generate_qr(serial):
+
     qr = qrcode.make(serial)
+
     buffer = io.BytesIO()
+
     qr.save(buffer, format="PNG")
+
     return base64.b64encode(buffer.getvalue()).decode()
 
 
@@ -119,13 +125,17 @@ def generate_qr(serial):
 # =========================
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+
     if request.method == 'POST':
 
         email = request.form['email']
         password = request.form['password']
 
         conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+        cur = conn.cursor(
+            cursor_factory=psycopg2.extras.DictCursor
+        )
 
         cur.execute("""
             SELECT * FROM users
@@ -138,6 +148,7 @@ def login():
         conn.close()
 
         if user:
+
             session['user'] = user['username']
             session['email'] = user['email']
 
@@ -161,9 +172,13 @@ def admin_panel():
         return redirect(url_for('login'))
 
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur = conn.cursor(
+        cursor_factory=psycopg2.extras.DictCursor
+    )
 
     cur.execute("SELECT * FROM users ORDER BY id DESC")
+
     users = cur.fetchall()
 
     cur.close()
@@ -182,11 +197,20 @@ def activity():
         return redirect(url_for('login'))
 
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur = conn.cursor(
+        cursor_factory=psycopg2.extras.DictCursor
+    )
 
     if session['user'] == 'admin':
-        cur.execute("SELECT * FROM activity_logs ORDER BY created_at DESC")
+
+        cur.execute("""
+            SELECT * FROM activity_logs
+            ORDER BY created_at DESC
+        """)
+
     else:
+
         cur.execute("""
             SELECT * FROM activity_logs
             WHERE created_at >= NOW() - INTERVAL '24 HOURS'
@@ -211,23 +235,50 @@ def index():
         return redirect(url_for('login'))
 
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT * FROM assets ORDER BY id DESC")
+    cur = conn.cursor(
+        cursor_factory=psycopg2.extras.DictCursor
+    )
+
+    cur.execute("""
+        SELECT * FROM assets
+        ORDER BY id DESC
+    """)
+
     data = cur.fetchall()
 
     total = len(data)
-    working = len([x for x in data if x['status'] == 'Working'])
-    maintenance = len([x for x in data if x['status'] == 'Maintenance'])
-    faulty = len([x for x in data if x['status'] == 'Faulty'])
+
+    working = len([
+        x for x in data
+        if x['status'] == 'Working'
+    ])
+
+    maintenance = len([
+        x for x in data
+        if x['status'] == 'Maintenance'
+    ])
+
+    faulty = len([
+        x for x in data
+        if x['status'] == 'Faulty'
+    ])
 
     if session['user'] == 'admin':
-        cur.execute("SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 10")
+
+        cur.execute("""
+            SELECT * FROM activity_logs
+            ORDER BY created_at DESC
+            LIMIT 10
+        """)
+
     else:
+
         cur.execute("""
             SELECT * FROM activity_logs
             WHERE created_at >= NOW() - INTERVAL '24 HOURS'
-            ORDER BY created_at DESC LIMIT 10
+            ORDER BY created_at DESC
+            LIMIT 10
         """)
 
     logs = cur.fetchall()
@@ -247,7 +298,7 @@ def index():
 
 
 # =========================
-# ADD ASSET + QR
+# ADD ASSET
 # =========================
 @app.route('/add', methods=['GET', 'POST'])
 def add():
@@ -258,16 +309,24 @@ def add():
     if request.method == 'POST':
 
         serial = request.form['serial_number']
+
         qr_code = generate_qr(serial)
 
         conn = get_db_connection()
+
         cur = conn.cursor()
 
         cur.execute("""
             INSERT INTO assets (
-                asset_type, tracking_number, cpu_name,
-                serial_number, ram_size, storage_type,
-                status, location, qr_code
+                asset_type,
+                tracking_number,
+                cpu_name,
+                serial_number,
+                ram_size,
+                storage_type,
+                status,
+                location,
+                qr_code
             )
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
@@ -284,7 +343,11 @@ def add():
 
         conn.commit()
 
-        log_action(session['email'], "REGISTER ASSET", serial)
+        log_action(
+            session['email'],
+            "REGISTER ASSET",
+            serial
+        )
 
         cur.close()
         conn.close()
@@ -292,6 +355,78 @@ def add():
         return redirect(url_for('index'))
 
     return render_template("add.html")
+
+
+# =========================
+# VIEW ASSET
+# =========================
+@app.route('/asset/<int:id>')
+def view_asset(id):
+
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+
+    cur = conn.cursor(
+        cursor_factory=psycopg2.extras.DictCursor
+    )
+
+    cur.execute("""
+        SELECT * FROM assets
+        WHERE id=%s
+    """, (id,))
+
+    asset = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    if not asset:
+        flash("Asset not found")
+        return redirect(url_for('index'))
+
+    return render_template(
+        "view.html",
+        asset=asset
+    )
+
+
+# =========================
+# QR DISPLAY
+# =========================
+@app.route('/qr/<int:id>')
+def qr_display(id):
+
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+
+    cur = conn.cursor(
+        cursor_factory=psycopg2.extras.DictCursor
+    )
+
+    cur.execute("""
+        SELECT * FROM assets
+        WHERE id=%s
+    """, (id,))
+
+    asset = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    if not asset:
+        flash("Asset not found")
+        return redirect(url_for('index'))
+
+    return render_template(
+        "qr_display.html",
+        id=asset['id'],
+        sn=asset['serial_number'],
+        qr_code=asset['qr_code']
+    )
 
 
 # =========================
@@ -304,21 +439,35 @@ def edit(id):
         return redirect(url_for('login'))
 
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT * FROM assets WHERE id=%s", (id,))
+    cur = conn.cursor(
+        cursor_factory=psycopg2.extras.DictCursor
+    )
+
+    cur.execute("""
+        SELECT * FROM assets
+        WHERE id=%s
+    """, (id,))
+
     asset = cur.fetchone()
 
     if request.method == 'POST':
 
         serial = request.form['serial_number']
+
         qr_code = generate_qr(serial)
 
         cur.execute("""
             UPDATE assets
-            SET asset_type=%s, tracking_number=%s, cpu_name=%s,
-                ram_size=%s, storage_type=%s, location=%s,
-                status=%s, serial_number=%s, qr_code=%s
+            SET asset_type=%s,
+                tracking_number=%s,
+                cpu_name=%s,
+                ram_size=%s,
+                storage_type=%s,
+                location=%s,
+                status=%s,
+                serial_number=%s,
+                qr_code=%s
             WHERE id=%s
         """, (
             request.form['asset_type'],
@@ -335,7 +484,11 @@ def edit(id):
 
         conn.commit()
 
-        log_action(session['email'], "EDIT ASSET", serial)
+        log_action(
+            session['email'],
+            "EDIT ASSET",
+            serial
+        )
 
         cur.close()
         conn.close()
@@ -345,7 +498,10 @@ def edit(id):
     cur.close()
     conn.close()
 
-    return render_template("edit.html", asset=asset)
+    return render_template(
+        "edit.html",
+        asset=asset
+    )
 
 
 # =========================
@@ -358,15 +514,31 @@ def delete_asset(id):
         return redirect(url_for('login'))
 
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT serial_number FROM assets WHERE id=%s", (id,))
+    cur = conn.cursor(
+        cursor_factory=psycopg2.extras.DictCursor
+    )
+
+    cur.execute("""
+        SELECT serial_number
+        FROM assets
+        WHERE id=%s
+    """, (id,))
+
     asset = cur.fetchone()
 
-    cur.execute("DELETE FROM assets WHERE id=%s", (id,))
+    cur.execute("""
+        DELETE FROM assets
+        WHERE id=%s
+    """, (id,))
+
     conn.commit()
 
-    log_action(session['email'], "DELETE ASSET", asset['serial_number'])
+    log_action(
+        session['email'],
+        "DELETE ASSET",
+        asset['serial_number']
+    )
 
     cur.close()
     conn.close()
@@ -379,7 +551,9 @@ def delete_asset(id):
 # =========================
 @app.route('/logout')
 def logout():
+
     session.clear()
+
     return redirect(url_for('login'))
 
 
