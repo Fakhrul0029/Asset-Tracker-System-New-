@@ -5,6 +5,7 @@ import base64
 import qrcode
 import psycopg2
 import psycopg2.extras
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 
 app = Flask(__name__)
@@ -13,34 +14,21 @@ app.secret_key = 'jpkn_assets_tracking_final_2026'
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 
-# =========================
-# DB CONNECTION
-# =========================
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
 
 
-# =========================
-# INIT DATABASE
-# =========================
 def init_db():
+
     conn = get_db_connection()
     cur = conn.cursor()
 
     try:
 
-        # USERS TABLE
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username TEXT UNIQUE,
-                email TEXT UNIQUE,
-                password TEXT
-            );
-        """)
-
+        # =========================
         # ASSETS TABLE
-        cur.execute("""
+        # =========================
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS assets (
                 id SERIAL PRIMARY KEY,
                 asset_type TEXT,
@@ -52,42 +40,69 @@ def init_db():
                 location TEXT,
                 status TEXT,
                 maintenance_logs TEXT,
-                scan_count INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                scan_count INTEGER DEFAULT 0
             );
-        """)
+        ''')
 
-        # ACTIVITY LOG TABLE
-        cur.execute("""
+        # =========================
+        # USERS TABLE
+        # =========================
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE,
+                password TEXT NOT NULL
+            );
+        ''')
+
+        # =========================
+        # ACTIVITY LOG TABLE (NEW)
+        # =========================
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS activity_logs (
                 id SERIAL PRIMARY KEY,
-                user_email TEXT,
                 action TEXT,
-                asset_serial TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                asset_id INTEGER,
+                username TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
-        """)
+        ''')
 
+        # =========================
         # DEFAULT ADMIN
-        cur.execute("""
-            SELECT * FROM users WHERE username = 'admin'
-        """)
+        # =========================
+        cur.execute('''
+            SELECT * FROM users
+            WHERE username = %s
+        ''', ('admin',))
 
-        admin = cur.fetchone()
+        admin_exists = cur.fetchone()
 
-        if not admin:
-            cur.execute("""
-                INSERT INTO users (username, email, password)
+        if not admin_exists:
+
+            cur.execute('''
+                INSERT INTO users (
+                    username,
+                    email,
+                    password
+                )
                 VALUES (%s, %s, %s)
-            """, ("admin", "admin@gmail.com", "admin123"))
+            ''', (
+                'admin',
+                'admin@gmail.com',
+                'admin123'
+            ))
 
         conn.commit()
 
     except Exception as e:
+
         conn.rollback()
-        print("DB Error:", e)
+        print(f"Database Error: {e}")
 
     finally:
+
         cur.close()
         conn.close()
 
@@ -96,27 +111,11 @@ init_db()
 
 
 # =========================
-# LOG FUNCTION
-# =========================
-def log_action(email, action, serial):
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO activity_logs (user_email, action, asset_serial)
-        VALUES (%s, %s, %s)
-    """, (email, action, serial))
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-
-# =========================
 # LOGIN
 # =========================
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+
     if request.method == 'POST':
 
         email = request.form['email']
@@ -125,10 +124,10 @@ def login():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-        cur.execute("""
+        cur.execute('''
             SELECT * FROM users
-            WHERE email=%s AND password=%s
-        """, (email, password))
+            WHERE email = %s AND password = %s
+        ''', (email, password))
 
         user = cur.fetchone()
 
@@ -144,33 +143,33 @@ def login():
 
             return redirect(url_for('index'))
 
-        flash("Invalid login")
+        flash('Invalid Email or Password')
 
-    return render_template("login.html")
+    return render_template('login.html')
 
 
 # =========================
-# ADMIN PANEL (USER MANAGEMENT)
+# ADMIN PANEL
 # =========================
 @app.route('/admin')
 def admin_panel():
 
-    if 'user' not in session:
+    if session.get('user') != 'admin':
         return redirect(url_for('login'))
-
-    if session['user'] != 'admin':
-        return redirect(url_for('index'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT * FROM users ORDER BY id DESC")
+    cur.execute('SELECT * FROM users ORDER BY id ASC')
     users = cur.fetchall()
+
+    cur.execute('SELECT * FROM activity_logs ORDER BY timestamp DESC')
+    logs = cur.fetchall()
 
     cur.close()
     conn.close()
 
-    return render_template("admin.html", users=users)
+    return render_template('admin.html', users=users, logs=logs)
 
 
 # =========================
@@ -180,7 +179,7 @@ def admin_panel():
 def add_user():
 
     if session.get('user') != 'admin':
-        return redirect(url_for('index'))
+        return redirect(url_for('login'))
 
     username = request.form['username']
     email = request.form['email']
@@ -190,17 +189,18 @@ def add_user():
     cur = conn.cursor()
 
     try:
-        cur.execute("""
+
+        cur.execute('''
             INSERT INTO users (username, email, password)
             VALUES (%s, %s, %s)
-        """, (username, email, password))
+        ''', (username, email, password))
 
         conn.commit()
-        flash("User added")
+        flash('User Added Successfully')
 
-    except Exception:
+    except Exception as e:
         conn.rollback()
-        flash("User already exists")
+        flash('Error adding user')
 
     finally:
         cur.close()
@@ -216,14 +216,15 @@ def add_user():
 def delete_user(id):
 
     if session.get('user') != 'admin':
-        return redirect(url_for('index'))
+        return redirect(url_for('login'))
 
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute("DELETE FROM users WHERE id=%s", (id,))
+    cur.execute('DELETE FROM users WHERE id = %s', (id,))
 
     conn.commit()
+
     cur.close()
     conn.close()
 
@@ -231,7 +232,7 @@ def delete_user(id):
 
 
 # =========================
-# DASHBOARD
+# INDEX (USER VIEW)
 # =========================
 @app.route('/')
 def index():
@@ -242,179 +243,38 @@ def index():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT * FROM assets ORDER BY id DESC")
+    cur.execute('SELECT * FROM assets ORDER BY id DESC')
     data = cur.fetchall()
 
     total = len(data)
-    working = len([x for x in data if x['status'] == 'Working'])
-    maintenance = len([x for x in data if x['status'] == 'Maintenance'])
-    faulty = len([x for x in data if x['status'] == 'Faulty'])
+
+    working = len([r for r in data if r['status'] == 'Working'])
+    maintenance = len([r for r in data if r['status'] == 'Maintenance'])
+    faulty = len([r for r in data if r['status'] == 'Faulty'])
 
     # =========================
-    # ACTIVITY LOG RULE
+    # ACTIVITY LOG FILTER (24 HOURS)
     # =========================
-    if session['user'] == 'admin':
-        cur.execute("SELECT * FROM activity_logs ORDER BY created_at DESC")
-    else:
-        cur.execute("""
-            SELECT * FROM activity_logs
-            WHERE created_at >= NOW() - INTERVAL '24 HOURS'
-            ORDER BY created_at DESC
-        """)
+    cur.execute('''
+        SELECT * FROM activity_logs
+        WHERE timestamp >= NOW() - INTERVAL '24 hours'
+        ORDER BY timestamp DESC
+    ''')
 
     logs = cur.fetchall()
-
-    # =========================
-    # DAILY REPORT (ADMIN ONLY)
-    # =========================
-    report = None
-
-    if session['user'] == 'admin':
-        cur.execute("""
-            SELECT DATE(created_at) as day,
-                   COUNT(*) FILTER (WHERE status='Working') as working,
-                   COUNT(*) FILTER (WHERE status='Maintenance') as maintenance,
-                   COUNT(*) FILTER (WHERE status='Faulty') as faulty
-            FROM assets
-            GROUP BY DATE(created_at)
-            ORDER BY day DESC;
-        """)
-
-        report = cur.fetchall()
 
     cur.close()
     conn.close()
 
     return render_template(
-        "assets.html",
+        'assets.html',
         data=data,
         total=total,
         working=working,
         maintenance=maintenance,
         faulty=faulty,
-        logs=logs,
-        report=report
+        logs=logs
     )
-
-
-# =========================
-# ADD ASSET
-# =========================
-@app.route('/add', methods=['GET', 'POST'])
-def add():
-
-    if 'user' not in session:
-        return redirect(url_for('login'))
-
-    if request.method == 'POST':
-
-        serial = request.form['serial_number']
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        cur.execute("""
-            INSERT INTO assets (
-                asset_type, tracking_number, cpu_name,
-                serial_number, ram_size, storage_type,
-                status, location
-            )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (
-            request.form['asset_type'],
-            request.form['tracking_number'],
-            request.form['cpu_name'],
-            serial,
-            request.form['ram_size'],
-            request.form['storage_type'],
-            request.form['status'],
-            request.form['location']
-        ))
-
-        conn.commit()
-
-        log_action(session['email'], "REGISTER ASSET", serial)
-
-        cur.close()
-        conn.close()
-
-        return redirect(url_for('index'))
-
-    return render_template("add.html")
-
-
-# =========================
-# EDIT ASSET
-# =========================
-@app.route('/edit/<int:id>', methods=['GET', 'POST'])
-def edit(id):
-
-    if 'user' not in session:
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-    cur.execute("SELECT * FROM assets WHERE id=%s", (id,))
-    asset = cur.fetchone()
-
-    if request.method == 'POST':
-
-        cur.execute("""
-            UPDATE assets
-            SET asset_type=%s, tracking_number=%s, cpu_name=%s,
-                ram_size=%s, storage_type=%s, location=%s, status=%s
-            WHERE id=%s
-        """, (
-            request.form['asset_type'],
-            request.form['tracking_number'],
-            request.form['cpu_name'],
-            request.form['ram_size'],
-            request.form['storage_type'],
-            request.form['location'],
-            request.form['status'],
-            id
-        ))
-
-        conn.commit()
-
-        log_action(session['email'], "EDIT ASSET", asset['serial_number'])
-
-        cur.close()
-        conn.close()
-
-        return redirect(url_for('index'))
-
-    cur.close()
-    conn.close()
-
-    return render_template("edit.html", asset=asset)
-
-
-# =========================
-# DELETE ASSET
-# =========================
-@app.route('/delete/<int:id>', methods=['POST'])
-def delete_asset(id):
-
-    if 'user' not in session:
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-    cur.execute("SELECT serial_number FROM assets WHERE id=%s", (id,))
-    asset = cur.fetchone()
-
-    cur.execute("DELETE FROM assets WHERE id=%s", (id,))
-    conn.commit()
-
-    log_action(session['email'], "DELETE ASSET", asset['serial_number'])
-
-    cur.close()
-    conn.close()
-
-    return redirect(url_for('index'))
 
 
 # =========================
@@ -426,5 +286,30 @@ def logout():
     return redirect(url_for('login'))
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+# =========================
+# LOG ACTIVITY FUNCTION
+# =========================
+def log_activity(action, asset_id):
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute('''
+        INSERT INTO activity_logs (action, asset_id, username)
+        VALUES (%s, %s, %s)
+    ''', (
+        action,
+        asset_id,
+        session.get('user')
+    ))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# =========================
+# RUN
+# =========================
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
