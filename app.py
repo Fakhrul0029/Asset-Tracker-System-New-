@@ -4,9 +4,9 @@ import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 
 app = Flask(__name__)
-app.secret_key = "jpkn_assets_tracking_final_2026"
+app.secret_key = 'jpkn_assets_tracking_final_2026'
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 
 # =========================
@@ -17,16 +17,14 @@ def get_db_connection():
 
 
 # =========================
-# AUTO DATABASE SETUP
+# INIT DATABASE
 # =========================
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
 
     try:
-        # =========================
-        # USERS TABLE
-        # =========================
+        # USERS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -36,9 +34,7 @@ def init_db():
             );
         """)
 
-        # =========================
-        # ASSETS TABLE
-        # =========================
+        # ASSETS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS assets (
                 id SERIAL PRIMARY KEY,
@@ -56,9 +52,7 @@ def init_db():
             );
         """)
 
-        # =========================
-        # ACTIVITY LOG TABLE
-        # =========================
+        # ACTIVITY LOG
         cur.execute("""
             CREATE TABLE IF NOT EXISTS activity_logs (
                 id SERIAL PRIMARY KEY,
@@ -69,9 +63,7 @@ def init_db():
             );
         """)
 
-        # =========================
         # DEFAULT ADMIN
-        # =========================
         cur.execute("SELECT * FROM users WHERE username='admin'")
         admin = cur.fetchone()
 
@@ -85,7 +77,7 @@ def init_db():
 
     except Exception as e:
         conn.rollback()
-        print("DB INIT ERROR:", e)
+        print("DB ERROR:", e)
 
     finally:
         cur.close()
@@ -96,38 +88,31 @@ init_db()
 
 
 # =========================
-# ACTIVITY LOGGER
+# LOG FUNCTION
 # =========================
 def log_action(email, action, serial):
     conn = get_db_connection()
     cur = conn.cursor()
 
-    try:
-        cur.execute("""
-            INSERT INTO activity_logs (user_email, action, asset_serial)
-            VALUES (%s, %s, %s)
-        """, (email, action, serial))
+    cur.execute("""
+        INSERT INTO activity_logs (user_email, action, asset_serial)
+        VALUES (%s, %s, %s)
+    """, (email, action, serial))
 
-        conn.commit()
-
-    except Exception as e:
-        print("LOG ERROR:", e)
-        conn.rollback()
-
-    finally:
-        cur.close()
-        conn.close()
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 # =========================
 # LOGIN
 # =========================
-@app.route("/login", methods=["GET", "POST"])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == "POST":
+    if request.method == 'POST':
 
-        email = request.form["email"]
-        password = request.form["password"]
+        email = request.form['email']
+        password = request.form['password']
 
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -143,13 +128,13 @@ def login():
         conn.close()
 
         if user:
-            session["user"] = user["username"]
-            session["email"] = user["email"]
+            session['user'] = user['username']
+            session['email'] = user['email']
 
-            if user["username"] == "admin":
-                return redirect(url_for("admin_panel"))
+            if user['username'] == 'admin':
+                return redirect(url_for('admin_panel'))
 
-            return redirect(url_for("index"))
+            return redirect(url_for('index'))
 
         flash("Invalid login")
 
@@ -159,10 +144,11 @@ def login():
 # =========================
 # ADMIN PANEL
 # =========================
-@app.route("/admin")
+@app.route('/admin')
 def admin_panel():
-    if session.get("user") != "admin":
-        return redirect(url_for("index"))
+
+    if session.get('user') != 'admin':
+        return redirect(url_for('index'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -179,14 +165,11 @@ def admin_panel():
 # =========================
 # ADD USER
 # =========================
-@app.route("/add_user", methods=["POST"])
+@app.route('/add_user', methods=['POST'])
 def add_user():
-    if session.get("user") != "admin":
-        return redirect(url_for("index"))
 
-    username = request.form["username"]
-    email = request.form["email"]
-    password = request.form["password"]
+    if session.get('user') != 'admin':
+        return redirect(url_for('index'))
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -195,10 +178,14 @@ def add_user():
         cur.execute("""
             INSERT INTO users (username, email, password)
             VALUES (%s, %s, %s)
-        """, (username, email, password))
+        """, (
+            request.form['username'],
+            request.form['email'],
+            request.form['password']
+        ))
 
         conn.commit()
-        flash("User added successfully")
+        flash("User added")
 
     except Exception:
         conn.rollback()
@@ -208,16 +195,17 @@ def add_user():
         cur.close()
         conn.close()
 
-    return redirect(url_for("admin_panel"))
+    return redirect(url_for('admin_panel'))
 
 
 # =========================
 # DELETE USER
 # =========================
-@app.route("/delete_user/<int:id>", methods=["POST"])
+@app.route('/delete_user/<int:id>', methods=['POST'])
 def delete_user(id):
-    if session.get("user") != "admin":
-        return redirect(url_for("index"))
+
+    if session.get('user') != 'admin':
+        return redirect(url_for('index'))
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -228,35 +216,55 @@ def delete_user(id):
     cur.close()
     conn.close()
 
-    return redirect(url_for("admin_panel"))
+    return redirect(url_for('admin_panel'))
 
 
 # =========================
 # DASHBOARD
 # =========================
-@app.route("/")
+@app.route('/')
 def index():
-    if "user" not in session:
-        return redirect(url_for("login"))
+
+    if 'user' not in session:
+        return redirect(url_for('login'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    # =========================
-    # ASSETS
-    # =========================
     cur.execute("SELECT * FROM assets ORDER BY id DESC")
     data = cur.fetchall()
 
     total = len(data)
-    working = len([x for x in data if x["status"] == "Working"])
-    maintenance = len([x for x in data if x["status"] == "Maintenance"])
-    faulty = len([x for x in data if x["status"] == "Faulty"])
+    working = len([x for x in data if x['status'] == 'Working'])
+    maintenance = len([x for x in data if x['status'] == 'Maintenance'])
+    faulty = len([x for x in data if x['status'] == 'Faulty'])
 
-    # =========================
-    # ACTIVITY LOG RULE
-    # =========================
-    if session["user"] == "admin":
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "assets.html",
+        data=data,
+        total=total,
+        working=working,
+        maintenance=maintenance,
+        faulty=faulty
+    )
+
+
+# =========================
+# ACTIVITY LOG PAGE (IMPORTANT FIX)
+# =========================
+@app.route('/activity')
+def activity():
+
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    if session['user'] == 'admin':
         cur.execute("""
             SELECT * FROM activity_logs
             ORDER BY created_at DESC
@@ -270,48 +278,24 @@ def index():
 
     logs = cur.fetchall()
 
-    # =========================
-    # ADMIN REPORT (DAILY)
-    # =========================
-    report = None
-
-    if session["user"] == "admin":
-        cur.execute("""
-            SELECT 
-                DATE(created_at) AS day,
-                COUNT(*) AS total_actions
-            FROM activity_logs
-            GROUP BY DATE(created_at)
-            ORDER BY day DESC;
-        """)
-        report = cur.fetchall()
-
     cur.close()
     conn.close()
 
-    return render_template(
-        "assets.html",
-        data=data,
-        total=total,
-        working=working,
-        maintenance=maintenance,
-        faulty=faulty,
-        logs=logs,
-        report=report
-    )
+    return render_template("activity.html", logs=logs)
 
 
 # =========================
 # ADD ASSET
 # =========================
-@app.route("/add", methods=["GET", "POST"])
+@app.route('/add', methods=['GET', 'POST'])
 def add():
-    if "user" not in session:
-        return redirect(url_for("login"))
 
-    if request.method == "POST":
+    if 'user' not in session:
+        return redirect(url_for('login'))
 
-        serial = request.form["serial_number"]
+    if request.method == 'POST':
+
+        serial = request.form['serial_number']
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -324,24 +308,24 @@ def add():
             )
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
-            request.form["asset_type"],
-            request.form["tracking_number"],
-            request.form["cpu_name"],
+            request.form['asset_type'],
+            request.form['tracking_number'],
+            request.form['cpu_name'],
             serial,
-            request.form["ram_size"],
-            request.form["storage_type"],
-            request.form["status"],
-            request.form["location"]
+            request.form['ram_size'],
+            request.form['storage_type'],
+            request.form['status'],
+            request.form['location']
         ))
 
         conn.commit()
 
-        log_action(session["email"], "REGISTER ASSET", serial)
+        log_action(session['email'], "REGISTER ASSET", serial)
 
         cur.close()
         conn.close()
 
-        return redirect(url_for("index"))
+        return redirect(url_for('index'))
 
     return render_template("add.html")
 
@@ -349,10 +333,11 @@ def add():
 # =========================
 # EDIT ASSET
 # =========================
-@app.route("/edit/<int:id>", methods=["GET", "POST"])
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
-    if "user" not in session:
-        return redirect(url_for("login"))
+
+    if 'user' not in session:
+        return redirect(url_for('login'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -360,7 +345,7 @@ def edit(id):
     cur.execute("SELECT * FROM assets WHERE id=%s", (id,))
     asset = cur.fetchone()
 
-    if request.method == "POST":
+    if request.method == 'POST':
 
         cur.execute("""
             UPDATE assets
@@ -368,24 +353,24 @@ def edit(id):
                 ram_size=%s, storage_type=%s, location=%s, status=%s
             WHERE id=%s
         """, (
-            request.form["asset_type"],
-            request.form["tracking_number"],
-            request.form["cpu_name"],
-            request.form["ram_size"],
-            request.form["storage_type"],
-            request.form["location"],
-            request.form["status"],
+            request.form['asset_type'],
+            request.form['tracking_number'],
+            request.form['cpu_name'],
+            request.form['ram_size'],
+            request.form['storage_type'],
+            request.form['location'],
+            request.form['status'],
             id
         ))
 
         conn.commit()
 
-        log_action(session["email"], "EDIT ASSET", asset["serial_number"])
+        log_action(session['email'], "EDIT ASSET", asset['serial_number'])
 
         cur.close()
         conn.close()
 
-        return redirect(url_for("index"))
+        return redirect(url_for('index'))
 
     cur.close()
     conn.close()
@@ -396,10 +381,11 @@ def edit(id):
 # =========================
 # DELETE ASSET
 # =========================
-@app.route("/delete/<int:id>", methods=["POST"])
+@app.route('/delete/<int:id>', methods=['POST'])
 def delete_asset(id):
-    if "user" not in session:
-        return redirect(url_for("login"))
+
+    if 'user' not in session:
+        return redirect(url_for('login'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -410,21 +396,21 @@ def delete_asset(id):
     cur.execute("DELETE FROM assets WHERE id=%s", (id,))
     conn.commit()
 
-    log_action(session["email"], "DELETE ASSET", asset["serial_number"])
+    log_action(session['email'], "DELETE ASSET", asset['serial_number'])
 
     cur.close()
     conn.close()
 
-    return redirect(url_for("index"))
+    return redirect(url_for('index'))
 
 
 # =========================
 # LOGOUT
 # =========================
-@app.route("/logout")
+@app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for("login"))
+    return redirect(url_for('login'))
 
 
 if __name__ == "__main__":
