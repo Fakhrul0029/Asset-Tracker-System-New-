@@ -1,4 +1,7 @@
 import os
+import io
+import base64
+import qrcode
 import psycopg2
 import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, session, flash
@@ -24,7 +27,6 @@ def init_db():
     cur = conn.cursor()
 
     try:
-        # USERS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -34,7 +36,6 @@ def init_db():
             );
         """)
 
-        # ASSETS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS assets (
                 id SERIAL PRIMARY KEY,
@@ -48,11 +49,11 @@ def init_db():
                 status TEXT,
                 maintenance_logs TEXT,
                 scan_count INTEGER DEFAULT 0,
+                qr_code TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
 
-        # ACTIVITY LOG
         cur.execute("""
             CREATE TABLE IF NOT EXISTS activity_logs (
                 id SERIAL PRIMARY KEY,
@@ -63,7 +64,6 @@ def init_db():
             );
         """)
 
-        # DEFAULT ADMIN
         cur.execute("SELECT * FROM users WHERE username='admin'")
         admin = cur.fetchone()
 
@@ -102,6 +102,16 @@ def log_action(email, action, serial):
     conn.commit()
     cur.close()
     conn.close()
+
+
+# =========================
+# QR GENERATOR
+# =========================
+def generate_qr(serial):
+    qr = qrcode.make(serial)
+    buffer = io.BytesIO()
+    qr.save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode()
 
 
 # =========================
@@ -163,7 +173,7 @@ def admin_panel():
 
 
 # =========================
-# ACTIVITY PAGE (FIXED)
+# ACTIVITY PAGE
 # =========================
 @app.route('/activity')
 def activity():
@@ -174,14 +184,8 @@ def activity():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    # ADMIN: full history
     if session['user'] == 'admin':
-        cur.execute("""
-            SELECT * FROM activity_logs
-            ORDER BY created_at DESC
-        """)
-
-    # USER: last 24 hours only
+        cur.execute("SELECT * FROM activity_logs ORDER BY created_at DESC")
     else:
         cur.execute("""
             SELECT * FROM activity_logs
@@ -217,19 +221,13 @@ def index():
     maintenance = len([x for x in data if x['status'] == 'Maintenance'])
     faulty = len([x for x in data if x['status'] == 'Faulty'])
 
-    # DASHBOARD LOG PREVIEW (safe)
     if session['user'] == 'admin':
-        cur.execute("""
-            SELECT * FROM activity_logs
-            ORDER BY created_at DESC
-            LIMIT 10
-        """)
+        cur.execute("SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 10")
     else:
         cur.execute("""
             SELECT * FROM activity_logs
             WHERE created_at >= NOW() - INTERVAL '24 HOURS'
-            ORDER BY created_at DESC
-            LIMIT 10
+            ORDER BY created_at DESC LIMIT 10
         """)
 
     logs = cur.fetchall()
@@ -249,7 +247,7 @@ def index():
 
 
 # =========================
-# ADD ASSET
+# ADD ASSET + QR
 # =========================
 @app.route('/add', methods=['GET', 'POST'])
 def add():
@@ -260,6 +258,7 @@ def add():
     if request.method == 'POST':
 
         serial = request.form['serial_number']
+        qr_code = generate_qr(serial)
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -268,9 +267,9 @@ def add():
             INSERT INTO assets (
                 asset_type, tracking_number, cpu_name,
                 serial_number, ram_size, storage_type,
-                status, location
+                status, location, qr_code
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             request.form['asset_type'],
             request.form['tracking_number'],
@@ -279,7 +278,8 @@ def add():
             request.form['ram_size'],
             request.form['storage_type'],
             request.form['status'],
-            request.form['location']
+            request.form['location'],
+            qr_code
         ))
 
         conn.commit()
@@ -311,10 +311,14 @@ def edit(id):
 
     if request.method == 'POST':
 
+        serial = request.form['serial_number']
+        qr_code = generate_qr(serial)
+
         cur.execute("""
             UPDATE assets
             SET asset_type=%s, tracking_number=%s, cpu_name=%s,
-                ram_size=%s, storage_type=%s, location=%s, status=%s
+                ram_size=%s, storage_type=%s, location=%s,
+                status=%s, serial_number=%s, qr_code=%s
             WHERE id=%s
         """, (
             request.form['asset_type'],
@@ -324,12 +328,14 @@ def edit(id):
             request.form['storage_type'],
             request.form['location'],
             request.form['status'],
+            serial,
+            qr_code,
             id
         ))
 
         conn.commit()
 
-        log_action(session['email'], "EDIT ASSET", asset['serial_number'])
+        log_action(session['email'], "EDIT ASSET", serial)
 
         cur.close()
         conn.close()
