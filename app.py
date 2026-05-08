@@ -1,7 +1,11 @@
 import os
+import io
+import csv
+import base64
+import qrcode
 import psycopg2
 import psycopg2.extras
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 
 app = Flask(__name__)
 app.secret_key = 'jpkn_assets_tracking_final_2026'
@@ -24,7 +28,8 @@ def init_db():
     cur = conn.cursor()
 
     try:
-        # USERS
+
+        # USERS TABLE
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -34,7 +39,7 @@ def init_db():
             );
         """)
 
-        # ASSETS
+        # ASSETS TABLE
         cur.execute("""
             CREATE TABLE IF NOT EXISTS assets (
                 id SERIAL PRIMARY KEY,
@@ -52,7 +57,7 @@ def init_db():
             );
         """)
 
-        # ACTIVITY LOG
+        # ACTIVITY LOG TABLE
         cur.execute("""
             CREATE TABLE IF NOT EXISTS activity_logs (
                 id SERIAL PRIMARY KEY,
@@ -64,7 +69,10 @@ def init_db():
         """)
 
         # DEFAULT ADMIN
-        cur.execute("SELECT * FROM users WHERE username='admin'")
+        cur.execute("""
+            SELECT * FROM users WHERE username = 'admin'
+        """)
+
         admin = cur.fetchone()
 
         if not admin:
@@ -77,7 +85,7 @@ def init_db():
 
     except Exception as e:
         conn.rollback()
-        print("DB ERROR:", e)
+        print("DB Error:", e)
 
     finally:
         cur.close()
@@ -142,12 +150,15 @@ def login():
 
 
 # =========================
-# ADMIN PANEL
+# ADMIN PANEL (USER MANAGEMENT)
 # =========================
 @app.route('/admin')
 def admin_panel():
 
-    if session.get('user') != 'admin':
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    if session['user'] != 'admin':
         return redirect(url_for('index'))
 
     conn = get_db_connection()
@@ -171,6 +182,10 @@ def add_user():
     if session.get('user') != 'admin':
         return redirect(url_for('index'))
 
+    username = request.form['username']
+    email = request.form['email']
+    password = request.form['password']
+
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -178,11 +193,7 @@ def add_user():
         cur.execute("""
             INSERT INTO users (username, email, password)
             VALUES (%s, %s, %s)
-        """, (
-            request.form['username'],
-            request.form['email'],
-            request.form['password']
-        ))
+        """, (username, email, password))
 
         conn.commit()
         flash("User added")
@@ -211,8 +222,8 @@ def delete_user(id):
     cur = conn.cursor()
 
     cur.execute("DELETE FROM users WHERE id=%s", (id,))
-    conn.commit()
 
+    conn.commit()
     cur.close()
     conn.close()
 
@@ -239,36 +250,11 @@ def index():
     maintenance = len([x for x in data if x['status'] == 'Maintenance'])
     faulty = len([x for x in data if x['status'] == 'Faulty'])
 
-    cur.close()
-    conn.close()
-
-    return render_template(
-        "assets.html",
-        data=data,
-        total=total,
-        working=working,
-        maintenance=maintenance,
-        faulty=faulty
-    )
-
-
-# =========================
-# ACTIVITY LOG PAGE (IMPORTANT FIX)
-# =========================
-@app.route('/activity')
-def activity():
-
-    if 'user' not in session:
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
+    # =========================
+    # ACTIVITY LOG RULE
+    # =========================
     if session['user'] == 'admin':
-        cur.execute("""
-            SELECT * FROM activity_logs
-            ORDER BY created_at DESC
-        """)
+        cur.execute("SELECT * FROM activity_logs ORDER BY created_at DESC")
     else:
         cur.execute("""
             SELECT * FROM activity_logs
@@ -278,10 +264,37 @@ def activity():
 
     logs = cur.fetchall()
 
+    # =========================
+    # DAILY REPORT (ADMIN ONLY)
+    # =========================
+    report = None
+
+    if session['user'] == 'admin':
+        cur.execute("""
+            SELECT DATE(created_at) as day,
+                   COUNT(*) FILTER (WHERE status='Working') as working,
+                   COUNT(*) FILTER (WHERE status='Maintenance') as maintenance,
+                   COUNT(*) FILTER (WHERE status='Faulty') as faulty
+            FROM assets
+            GROUP BY DATE(created_at)
+            ORDER BY day DESC;
+        """)
+
+        report = cur.fetchall()
+
     cur.close()
     conn.close()
 
-    return render_template("activity.html", logs=logs)
+    return render_template(
+        "assets.html",
+        data=data,
+        total=total,
+        working=working,
+        maintenance=maintenance,
+        faulty=faulty,
+        logs=logs,
+        report=report
+    )
 
 
 # =========================
