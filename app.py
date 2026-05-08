@@ -49,6 +49,7 @@ def init_db():
                 location TEXT,
                 status TEXT,
                 qr_code TEXT,
+                scan_count INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
@@ -63,7 +64,6 @@ def init_db():
             );
         """)
 
-        # default admin
         cur.execute("SELECT * FROM users WHERE username='admin'")
         if not cur.fetchone():
             cur.execute("""
@@ -75,7 +75,7 @@ def init_db():
 
     except Exception as e:
         conn.rollback()
-        print(e)
+        print("DB ERROR:", e)
 
     finally:
         cur.close()
@@ -103,7 +103,7 @@ def log_action(email, action, serial):
 
 
 # =========================
-# QR
+# QR (FIXED: now stores URL)
 # =========================
 def generate_qr(data):
     img = qrcode.make(data)
@@ -164,52 +164,6 @@ def admin():
 
 
 # =========================
-# ADD USER
-# =========================
-@app.route('/add_user', methods=['POST'])
-def add_user():
-
-    if session.get('user') != 'admin':
-        return redirect(url_for('index'))
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO users (username,email,password)
-        VALUES (%s,%s,%s)
-    """, (
-        request.form['username'],
-        request.form['email'],
-        request.form['password']
-    ))
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return redirect(url_for('admin'))
-
-
-# =========================
-# DELETE USER
-# =========================
-@app.route('/delete_user/<int:id>', methods=['POST'])
-def delete_user(id):
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("DELETE FROM users WHERE id=%s", (id,))
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return redirect(url_for('admin'))
-
-
-# =========================
 # DASHBOARD
 # =========================
 @app.route('/')
@@ -253,6 +207,10 @@ def view(id):
     cur.execute("SELECT * FROM assets WHERE id=%s", (id,))
     asset = cur.fetchone()
 
+    # increase scan count
+    cur.execute("UPDATE assets SET scan_count = scan_count + 1 WHERE id=%s", (id,))
+    conn.commit()
+
     cur.close()
     conn.close()
 
@@ -260,7 +218,7 @@ def view(id):
 
 
 # =========================
-# QR PAGE
+# QR PAGE (FIXED)
 # =========================
 @app.route('/qr/<int:id>')
 def qr(id):
@@ -274,7 +232,9 @@ def qr(id):
     cur.close()
     conn.close()
 
-    qr_code = generate_qr(asset['serial_number'])
+    # 🔥 FIX: QR now opens full asset page
+    qr_data = url_for('view', id=id, _external=True)
+    qr_code = generate_qr(qr_data)
 
     return render_template("qr_display.html",
         id=asset['id'],
@@ -289,10 +249,12 @@ def qr(id):
 @app.route('/add', methods=['GET','POST'])
 def add():
 
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
     if request.method == 'POST':
 
         serial = request.form['serial_number']
-        qr_code = generate_qr(serial)
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -301,9 +263,9 @@ def add():
             INSERT INTO assets (
                 asset_type, tracking_number, cpu_name,
                 serial_number, ram_size, storage_type,
-                status, location, qr_code
+                status, location
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             request.form['asset_type'],
             request.form['tracking_number'],
@@ -312,11 +274,11 @@ def add():
             request.form['ram_size'],
             request.form['storage_type'],
             request.form['status'],
-            request.form['location'],
-            qr_code
+            request.form['location']
         ))
 
         conn.commit()
+
         log_action(session['email'], "ADD ASSET", serial)
 
         cur.close()
@@ -328,10 +290,13 @@ def add():
 
 
 # =========================
-# EDIT
+# EDIT ASSET
 # =========================
 @app.route('/edit/<int:id>', methods=['GET','POST'])
 def edit(id):
+
+    if 'user' not in session:
+        return redirect(url_for('login'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -342,13 +307,12 @@ def edit(id):
     if request.method == 'POST':
 
         serial = request.form['serial_number']
-        qr_code = generate_qr(serial)
 
         cur.execute("""
             UPDATE assets
             SET asset_type=%s, tracking_number=%s, cpu_name=%s,
                 ram_size=%s, storage_type=%s, location=%s,
-                status=%s, serial_number=%s, qr_code=%s
+                status=%s, serial_number=%s
             WHERE id=%s
         """, (
             request.form['asset_type'],
@@ -359,14 +323,20 @@ def edit(id):
             request.form['location'],
             request.form['status'],
             serial,
-            qr_code,
             id
         ))
 
         conn.commit()
+
         log_action(session['email'], "EDIT ASSET", serial)
 
+        cur.close()
+        conn.close()
+
         return redirect(url_for('index'))
+
+    cur.close()
+    conn.close()
 
     return render_template("edit.html", asset=asset)
 
@@ -376,6 +346,9 @@ def edit(id):
 # =========================
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete(id):
+
+    if 'user' not in session:
+        return redirect(url_for('login'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -387,6 +360,9 @@ def delete(id):
     conn.commit()
 
     log_action(session['email'], "DELETE ASSET", asset['serial_number'])
+
+    cur.close()
+    conn.close()
 
     return redirect(url_for('index'))
 
@@ -429,6 +405,9 @@ def activity():
 
     cur.execute("SELECT * FROM activity_logs ORDER BY created_at DESC")
     logs = cur.fetchall()
+
+    cur.close()
+    conn.close()
 
     return render_template("activity.html", logs=logs)
 
