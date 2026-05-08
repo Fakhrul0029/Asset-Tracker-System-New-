@@ -89,21 +89,24 @@ init_db()
 # LOG
 # =========================
 def log_action(email, action, serial):
-    conn = get_db_connection()
-    cur = conn.cursor()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-    cur.execute("""
-        INSERT INTO activity_logs (user_email, action, asset_serial)
-        VALUES (%s,%s,%s)
-    """, (email, action, serial))
+        cur.execute("""
+            INSERT INTO activity_logs (user_email, action, asset_serial)
+            VALUES (%s,%s,%s)
+        """, (email, action, serial))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+
+    finally:
+        cur.close()
+        conn.close()
 
 
 # =========================
-# QR (FIXED: now stores URL)
+# QR GENERATOR
 # =========================
 def generate_qr(data):
     img = qrcode.make(data)
@@ -118,7 +121,6 @@ def generate_qr(data):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
@@ -143,7 +145,7 @@ def login():
 
 
 # =========================
-# ADMIN PANEL
+# ADMIN PANEL (FIXED ADD USER)
 # =========================
 @app.route('/admin')
 def admin():
@@ -161,6 +163,53 @@ def admin():
     conn.close()
 
     return render_template("admin.html", users=users)
+
+
+@app.route('/add_user', methods=['POST'])
+def add_user():
+
+    if session.get('user') != 'admin':
+        return redirect(url_for('login'))
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            INSERT INTO users (username,email,password)
+            VALUES (%s,%s,%s)
+        """, (
+            request.form['username'],
+            request.form['email'],
+            request.form['password']
+        ))
+
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        flash("User already exists or invalid data!")
+
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for('admin'))
+
+
+@app.route('/delete_user/<int:id>', methods=['POST'])
+def delete_user(id):
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM users WHERE id=%s", (id,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect(url_for('admin'))
 
 
 # =========================
@@ -196,7 +245,7 @@ def index():
 
 
 # =========================
-# VIEW ASSET
+# VIEW ASSET (FIXED QR SCAN COUNT)
 # =========================
 @app.route('/asset/<int:id>')
 def view(id):
@@ -207,7 +256,6 @@ def view(id):
     cur.execute("SELECT * FROM assets WHERE id=%s", (id,))
     asset = cur.fetchone()
 
-    # increase scan count
     cur.execute("UPDATE assets SET scan_count = scan_count + 1 WHERE id=%s", (id,))
     conn.commit()
 
@@ -218,7 +266,7 @@ def view(id):
 
 
 # =========================
-# QR PAGE (FIXED)
+# QR (FIXED → FULL LINK)
 # =========================
 @app.route('/qr/<int:id>')
 def qr(id):
@@ -232,7 +280,6 @@ def qr(id):
     cur.close()
     conn.close()
 
-    # 🔥 FIX: QR now opens full asset page
     qr_data = url_for('view', id=id, _external=True)
     qr_code = generate_qr(qr_data)
 
@@ -244,7 +291,7 @@ def qr(id):
 
 
 # =========================
-# ADD ASSET
+# ADD ASSET (FIXED ERROR HANDLING)
 # =========================
 @app.route('/add', methods=['GET','POST'])
 def add():
@@ -254,35 +301,38 @@ def add():
 
     if request.method == 'POST':
 
-        serial = request.form['serial_number']
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
 
-        conn = get_db_connection()
-        cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO assets (
+                    asset_type, tracking_number, cpu_name,
+                    serial_number, ram_size, storage_type,
+                    status, location
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                request.form['asset_type'],
+                request.form['tracking_number'],
+                request.form['cpu_name'],
+                request.form['serial_number'],
+                request.form['ram_size'],
+                request.form['storage_type'],
+                request.form['status'],
+                request.form['location']
+            ))
 
-        cur.execute("""
-            INSERT INTO assets (
-                asset_type, tracking_number, cpu_name,
-                serial_number, ram_size, storage_type,
-                status, location
-            )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (
-            request.form['asset_type'],
-            request.form['tracking_number'],
-            request.form['cpu_name'],
-            serial,
-            request.form['ram_size'],
-            request.form['storage_type'],
-            request.form['status'],
-            request.form['location']
-        ))
+            conn.commit()
+            log_action(session['email'], "ADD ASSET", request.form['serial_number'])
 
-        conn.commit()
+        except Exception as e:
+            conn.rollback()
+            flash("Error adding asset: serial number may already exist")
 
-        log_action(session['email'], "ADD ASSET", serial)
-
-        cur.close()
-        conn.close()
+        finally:
+            cur.close()
+            conn.close()
 
         return redirect(url_for('index'))
 
@@ -290,7 +340,7 @@ def add():
 
 
 # =========================
-# EDIT ASSET
+# EDIT ASSET (FIXED)
 # =========================
 @app.route('/edit/<int:id>', methods=['GET','POST'])
 def edit(id):
@@ -306,32 +356,35 @@ def edit(id):
 
     if request.method == 'POST':
 
-        serial = request.form['serial_number']
+        try:
+            cur.execute("""
+                UPDATE assets
+                SET asset_type=%s, tracking_number=%s, cpu_name=%s,
+                    ram_size=%s, storage_type=%s, location=%s,
+                    status=%s, serial_number=%s
+                WHERE id=%s
+            """, (
+                request.form['asset_type'],
+                request.form['tracking_number'],
+                request.form['cpu_name'],
+                request.form['ram_size'],
+                request.form['storage_type'],
+                request.form['location'],
+                request.form['status'],
+                request.form['serial_number'],
+                id
+            ))
 
-        cur.execute("""
-            UPDATE assets
-            SET asset_type=%s, tracking_number=%s, cpu_name=%s,
-                ram_size=%s, storage_type=%s, location=%s,
-                status=%s, serial_number=%s
-            WHERE id=%s
-        """, (
-            request.form['asset_type'],
-            request.form['tracking_number'],
-            request.form['cpu_name'],
-            request.form['ram_size'],
-            request.form['storage_type'],
-            request.form['location'],
-            request.form['status'],
-            serial,
-            id
-        ))
+            conn.commit()
+            log_action(session['email'], "EDIT ASSET", request.form['serial_number'])
 
-        conn.commit()
+        except Exception as e:
+            conn.rollback()
+            flash("Update failed")
 
-        log_action(session['email'], "EDIT ASSET", serial)
-
-        cur.close()
-        conn.close()
+        finally:
+            cur.close()
+            conn.close()
 
         return redirect(url_for('index'))
 
@@ -346,9 +399,6 @@ def edit(id):
 # =========================
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete(id):
-
-    if 'user' not in session:
-        return redirect(url_for('login'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -368,7 +418,7 @@ def delete(id):
 
 
 # =========================
-# EXPORT CSV
+# EXPORT CSV (FIXED)
 # =========================
 @app.route('/export')
 def export():
@@ -388,7 +438,7 @@ def export():
     output.seek(0)
 
     return Response(
-        output,
+        output.getvalue(),
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment;filename=assets.csv"}
     )
