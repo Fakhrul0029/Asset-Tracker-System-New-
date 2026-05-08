@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Activity Log</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .topbar {
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 10px 15px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-right: 10px;
+            display: inline-block;
+        }
+
+        h2 {
+            margin-bottom: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background: #333;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        .register { color: green; font-weight: bold; }
+        .edit { color: orange; font-weight: bold; }
+        .delete { color: red; font-weight: bold; }
+
+    </style>
+</head>
+
+<body>
+
+    <div class="topbar">
+
+        <a href="/" class="btn">Dashboard</a>
+
+        {% if session['user'] == 'admin' %}
+        <a href="/admin" class="btn">Admin Panel</a>
+        {% endif %}
+
+        <a href="/logout" class="btn">Logout</a>
+
+    </div>
+
+    <h2>Activity Log</h2>
+
+    <table>
+
+        <tr>
+            <th>ID</th>
+            <th>User Email</th>
+            <th>Action</th>
+            <th>Asset Serial</th>
+            <th>Time</th>
+        </tr>
+
+        {% for log in logs %}
+
+        <tr>
+            <td>{{ log.id }}</td>
+            <td>{{ log.user_email }}</td>
+
+            <td>
+                {% if 'REGISTER' in log.action %}
+                    <span class="register">{{ log.action }}</span>
+
+                {% elif 'EDIT' in log.action %}
+                    <span class="edit">{{ log.action }}</span>
+
+                {% elif 'DELETE' in log.action %}
+                    <span class="delete">{{ log.action }}</span>
+
+                {% else %}
+                    {{ log.action }}
+                {% endif %}
+            </td>
+
+            <td>{{ log.asset_serial }}</td>
+            <td>{{ log.created_at }}</td>
+        </tr>
+
+        {% endfor %}
+
+    </table>
+
+</body>
+</html>
