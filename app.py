@@ -163,7 +163,7 @@ def admin_panel():
 
 
 # =========================
-# ACTIVITY PAGE (NEW FIXED ROUTE)
+# ACTIVITY PAGE (FIXED)
 # =========================
 @app.route('/activity')
 def activity():
@@ -174,11 +174,14 @@ def activity():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
+    # ADMIN: full history
     if session['user'] == 'admin':
         cur.execute("""
             SELECT * FROM activity_logs
             ORDER BY created_at DESC
         """)
+
+    # USER: last 24 hours only
     else:
         cur.execute("""
             SELECT * FROM activity_logs
@@ -214,14 +217,19 @@ def index():
     maintenance = len([x for x in data if x['status'] == 'Maintenance'])
     faulty = len([x for x in data if x['status'] == 'Faulty'])
 
-    # LOGS (dashboard preview only)
+    # DASHBOARD LOG PREVIEW (safe)
     if session['user'] == 'admin':
-        cur.execute("SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 10")
+        cur.execute("""
+            SELECT * FROM activity_logs
+            ORDER BY created_at DESC
+            LIMIT 10
+        """)
     else:
         cur.execute("""
             SELECT * FROM activity_logs
             WHERE created_at >= NOW() - INTERVAL '24 HOURS'
-            ORDER BY created_at DESC LIMIT 10
+            ORDER BY created_at DESC
+            LIMIT 10
         """)
 
     logs = cur.fetchall()
