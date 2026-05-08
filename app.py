@@ -24,7 +24,9 @@ def init_db():
 
     try:
 
-        # Assets table
+        # =========================
+        # ASSETS TABLE
+        # =========================
         cur.execute('''
             CREATE TABLE IF NOT EXISTS assets (
                 id SERIAL PRIMARY KEY,
@@ -41,30 +43,60 @@ def init_db():
             );
         ''')
 
-        # Users table
+        # =========================
+        # USERS TABLE
+        # =========================
         cur.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
-                email TEXT UNIQUE NOT NULL,
                 password TEXT NOT NULL
             );
         ''')
 
-        # Default admin
+        # =========================
+        # AUTO UPDATE OLD DATABASE
+        # =========================
         cur.execute('''
-            INSERT INTO users (
-                username,
-                email,
-                password
-            )
-            VALUES (%s, %s, %s)
-            ON CONFLICT (username) DO NOTHING;
-        ''', (
-            'admin',
-            'admin@gmail.com',
-            'admin123'
-        ))
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS email TEXT;
+        ''')
+
+        # =========================
+        # DEFAULT ADMIN
+        # =========================
+        cur.execute('''
+            SELECT * FROM users
+            WHERE username = %s
+        ''', ('admin',))
+
+        admin_exists = cur.fetchone()
+
+        if not admin_exists:
+
+            cur.execute('''
+                INSERT INTO users (
+                    username,
+                    email,
+                    password
+                )
+                VALUES (%s, %s, %s)
+            ''', (
+                'admin',
+                'admin@gmail.com',
+                'admin123'
+            ))
+
+        else:
+
+            cur.execute('''
+                UPDATE users
+                SET email = %s
+                WHERE username = %s
+            ''', (
+                'admin@gmail.com',
+                'admin'
+            ))
 
         conn.commit()
 
@@ -115,7 +147,6 @@ def login():
             session['user'] = user['username']
             session['email'] = user['email']
 
-            # Admin redirect
             if user['username'] == 'admin':
                 return redirect(url_for('admin_panel'))
 
@@ -271,307 +302,6 @@ def index():
         maintenance=maintenance,
         faulty=faulty
     )
-
-
-@app.route('/add', methods=['GET', 'POST'])
-def add():
-
-    if 'user' not in session:
-        return redirect(url_for('login'))
-
-    if request.method == 'POST':
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        try:
-
-            cur.execute('''
-                INSERT INTO assets (
-                    asset_type,
-                    tracking_number,
-                    cpu_name,
-                    serial_number,
-                    ram_size,
-                    storage_type,
-                    status,
-                    location
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (
-                request.form['asset_type'],
-                request.form['tracking_number'],
-                request.form['cpu_name'],
-                request.form['serial_number'],
-                request.form['ram_size'],
-                request.form['storage_type'],
-                request.form['status'],
-                request.form['location']
-            ))
-
-            conn.commit()
-
-            return redirect(url_for('index'))
-
-        except psycopg2.errors.UniqueViolation:
-
-            conn.rollback()
-
-            flash(
-                "This Serial Number is already registered."
-            )
-
-            return redirect(url_for('add'))
-
-        finally:
-
-            cur.close()
-            conn.close()
-
-    return render_template('add.html')
-
-
-@app.route('/edit/<int:id>', methods=['GET', 'POST'])
-def edit(id):
-
-    if 'user' not in session:
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-
-    cur = conn.cursor(
-        cursor_factory=psycopg2.extras.DictCursor
-    )
-
-    cur.execute(
-        'SELECT * FROM assets WHERE id = %s',
-        (id,)
-    )
-
-    asset = cur.fetchone()
-
-    if request.method == 'POST':
-
-        try:
-
-            log_entry = (
-                f"{request.form['category']}: "
-                f"{request.form['action']}"
-            )
-
-            if asset['maintenance_logs']:
-                new_logs = (
-                    asset['maintenance_logs']
-                    + "\n"
-                    + log_entry
-                )
-            else:
-                new_logs = log_entry
-
-            cur.execute('''
-                UPDATE assets
-                SET
-                    asset_type=%s,
-                    tracking_number=%s,
-                    cpu_name=%s,
-                    ram_size=%s,
-                    storage_type=%s,
-                    location=%s,
-                    status=%s,
-                    maintenance_logs=%s
-                WHERE id=%s
-            ''', (
-                request.form['asset_type'],
-                request.form['tracking_number'],
-                request.form['cpu_name'],
-                request.form['ram_size'],
-                request.form['storage_type'],
-                request.form['location'],
-                request.form['status'],
-                new_logs,
-                id
-            ))
-
-            conn.commit()
-
-            return redirect(url_for('index'))
-
-        except psycopg2.errors.UniqueViolation:
-
-            conn.rollback()
-
-            flash(
-                "Update failed. Serial Number already exists."
-            )
-
-            return redirect(
-                url_for('edit', id=id)
-            )
-
-        finally:
-
-            cur.close()
-            conn.close()
-
-    cur.close()
-    conn.close()
-
-    return render_template(
-        'edit.html',
-        asset=asset
-    )
-
-
-@app.route('/export')
-def export_assets():
-
-    if 'user' not in session:
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute('''
-        SELECT
-            asset_type,
-            tracking_number,
-            cpu_name,
-            serial_number,
-            ram_size,
-            storage_type,
-            location,
-            status
-        FROM assets
-    ''')
-
-    rows = cur.fetchall()
-
-    output = io.StringIO()
-
-    writer = csv.writer(output)
-
-    writer.writerow([
-        'Type',
-        'Tracking No',
-        'Brand/Model',
-        'Serial Number',
-        'RAM',
-        'Storage',
-        'Agency',
-        'Status'
-    ])
-
-    writer.writerows(rows)
-
-    cur.close()
-    conn.close()
-
-    return Response(
-        output.getvalue(),
-        mimetype='text/csv',
-        headers={
-            "Content-Disposition":
-            "attachment;filename=jpkn_report.csv"
-        }
-    )
-
-
-@app.route('/asset/<int:id>')
-def asset_view(id):
-
-    conn = get_db_connection()
-
-    cur = conn.cursor(
-        cursor_factory=psycopg2.extras.DictCursor
-    )
-
-    cur.execute(
-        'UPDATE assets SET scan_count = scan_count + 1 WHERE id = %s',
-        (id,)
-    )
-
-    conn.commit()
-
-    cur.execute(
-        'SELECT * FROM assets WHERE id = %s',
-        (id,)
-    )
-
-    data = cur.fetchone()
-
-    cur.close()
-    conn.close()
-
-    return render_template(
-        'asset.html',
-        data=data
-    )
-
-
-@app.route('/qr/<int:id>')
-def qr_display(id):
-
-    conn = get_db_connection()
-
-    cur = conn.cursor(
-        cursor_factory=psycopg2.extras.DictCursor
-    )
-
-    cur.execute(
-        'SELECT serial_number FROM assets WHERE id = %s',
-        (id,)
-    )
-
-    asset = cur.fetchone()
-
-    cur.close()
-    conn.close()
-
-    qr_url = url_for(
-        'asset_view',
-        id=id,
-        _external=True
-    )
-
-    img = qrcode.make(qr_url)
-
-    buf = io.BytesIO()
-
-    img.save(buf)
-
-    qr_b64 = base64.b64encode(
-        buf.getvalue()
-    ).decode('utf-8')
-
-    return render_template(
-        'qr_display.html',
-        id=id,
-        sn=asset['serial_number'],
-        qr_code=qr_b64
-    )
-
-
-@app.route('/delete/<int:id>', methods=['POST'])
-def delete_asset(id):
-
-    if 'user' not in session:
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-
-    cur = conn.cursor()
-
-    cur.execute(
-        'DELETE FROM assets WHERE id = %s',
-        (id,)
-    )
-
-    conn.commit()
-
-    cur.close()
-    conn.close()
-
-    return redirect(url_for('index'))
 
 
 @app.route('/logout')
