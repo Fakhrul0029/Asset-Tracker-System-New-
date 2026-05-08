@@ -18,10 +18,12 @@ def get_db_connection():
 
 
 def init_db():
+
     conn = get_db_connection()
     cur = conn.cursor()
 
     try:
+
         # Assets table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS assets (
@@ -44,30 +46,39 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                role TEXT DEFAULT 'user'
+                email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
             );
         ''')
 
-        # Default admin account
+        # Default admin
         cur.execute('''
-            INSERT INTO users (username, password, role)
+            INSERT INTO users (
+                username,
+                email,
+                password
+            )
             VALUES (%s, %s, %s)
             ON CONFLICT (username) DO NOTHING;
-        ''', ('admin', 'admin123', 'admin'))
+        ''', (
+            'admin',
+            'admin@gmail.com',
+            'admin123'
+        ))
 
         conn.commit()
 
     except Exception as e:
+
         conn.rollback()
-        print(f"Database initialization error: {e}")
+        print(f"Database Error: {e}")
 
     finally:
+
         cur.close()
         conn.close()
 
 
-# Initialize database
 init_db()
 
 
@@ -76,7 +87,7 @@ def login():
 
     if request.method == 'POST':
 
-        username = request.form['username']
+        email = request.form['email']
         password = request.form['password']
 
         conn = get_db_connection()
@@ -86,8 +97,12 @@ def login():
         )
 
         cur.execute(
-            'SELECT * FROM users WHERE username = %s AND password = %s',
-            (username, password)
+            '''
+            SELECT * FROM users
+            WHERE email = %s
+            AND password = %s
+            ''',
+            (email, password)
         )
 
         user = cur.fetchone()
@@ -98,14 +113,15 @@ def login():
         if user:
 
             session['user'] = user['username']
-            session['role'] = user['role']
+            session['email'] = user['email']
 
-            if user['role'] == 'admin':
+            # Admin redirect
+            if user['username'] == 'admin':
                 return redirect(url_for('admin_panel'))
 
             return redirect(url_for('index'))
 
-        flash('Invalid username or password')
+        flash('Invalid Email or Password')
 
     return render_template('login.html')
 
@@ -116,7 +132,7 @@ def admin_panel():
     if 'user' not in session:
         return redirect(url_for('login'))
 
-    if session.get('role') != 'admin':
+    if session['user'] != 'admin':
         return redirect(url_for('index'))
 
     conn = get_db_connection()
@@ -144,10 +160,11 @@ def add_user():
     if 'user' not in session:
         return redirect(url_for('login'))
 
-    if session.get('role') != 'admin':
+    if session['user'] != 'admin':
         return redirect(url_for('index'))
 
     username = request.form['username']
+    email = request.form['email']
     password = request.form['password']
 
     conn = get_db_connection()
@@ -156,19 +173,26 @@ def add_user():
     try:
 
         cur.execute(
-            'INSERT INTO users (username, password) VALUES (%s, %s)',
-            (username, password)
+            '''
+            INSERT INTO users (
+                username,
+                email,
+                password
+            )
+            VALUES (%s, %s, %s)
+            ''',
+            (username, email, password)
         )
 
         conn.commit()
 
-        flash('User added successfully')
+        flash('User Added Successfully')
 
     except psycopg2.errors.UniqueViolation:
 
         conn.rollback()
 
-        flash('Username already exists')
+        flash('Username or Email already exists')
 
     finally:
 
@@ -184,7 +208,7 @@ def delete_user(id):
     if 'user' not in session:
         return redirect(url_for('login'))
 
-    if session.get('role') != 'admin':
+    if session['user'] != 'admin':
         return redirect(url_for('index'))
 
     conn = get_db_connection()
