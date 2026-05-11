@@ -1,170 +1,64 @@
-<html>
+<hr class="my-5">
 
-<head>
+<h4 class="fw-bold mb-3">
 
-    <title>Admin Panel</title>
+    User Access Log
 
-    <link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</h4>
 
-</head>
+<table class="table table-bordered table-hover">
 
-<body class="bg-light p-5">
+    <thead class="table-dark">
 
-<div class="container bg-white p-4 rounded shadow">
+        <tr>
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+            <th>ID</th>
+            <th>User Email</th>
+            <th>Action</th>
+            <th>Time</th>
 
-        <h3 class="fw-bold">
-            USER MANAGEMENT
-        </h3>
+        </tr>
 
-        <div>
+    </thead>
 
-            <a href="/"
-               class="btn btn-primary btn-sm">
-               Asset System
-            </a>
+    <tbody>
 
-            <a href="/logout"
-               class="btn btn-danger btn-sm">
-               Logout
-            </a>
+        {% for log in access_logs %}
 
-        </div>
+        <tr>
 
-    </div>
+            <td>{{ log.id }}</td>
 
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for m in messages %}
+            <td>{{ log.user_email }}</td>
 
-                <div class="alert alert-info">
-                    {{ m }}
-                </div>
+            <td>
 
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+                {% if log.action == 'LOGIN' %}
 
-    <div class="card mb-4">
+                    <span class="badge bg-success">
 
-        <div class="card-header fw-bold">
-            Add Staff Account
-        </div>
+                        LOGIN
 
-        <div class="card-body">
+                    </span>
 
-            <form method="POST"
-                  action="/add_user">
+                {% else %}
 
-                <div class="mb-3">
+                    <span class="badge bg-danger">
 
-                    <label>
-                        Staff Username
-                    </label>
+                        LOGOUT
 
-                    <input type="text"
-                           name="username"
-                           class="form-control"
-                           required>
+                    </span>
 
-                </div>
+                {% endif %}
 
-                <div class="mb-3">
+            </td>
 
-                    <label>
-                        Staff Email
-                    </label>
+            <td>{{ log.created_at }}</td>
 
-                    <input type="email"
-                           name="email"
-                           class="form-control"
-                           placeholder="example@gmail.com"
-                           required>
+        </tr>
 
-                </div>
+        {% endfor %}
 
-                <div class="mb-3">
+    </tbody>
 
-                    <label>
-                        Password
-                    </label>
-
-                    <input type="text"
-                           name="password"
-                           class="form-control"
-                           required>
-
-                </div>
-
-                <button class="btn btn-success">
-                    Add User
-                </button>
-
-            </form>
-
-        </div>
-
-    </div>
-
-    <table class="table table-bordered table-hover">
-
-        <thead class="table-dark">
-
-            <tr>
-
-                <th>ID</th>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Password</th>
-                <th>Action</th>
-
-            </tr>
-
-        </thead>
-
-        <tbody>
-
-            {% for user in users %}
-
-            <tr>
-
-                <td>{{ user.id }}</td>
-
-                <td>{{ user.username }}</td>
-
-                <td>{{ user.email }}</td>
-
-                <td>{{ user.password }}</td>
-
-                <td>
-
-                    {% if user.username != 'admin' %}
-
-                    <form method="POST"
-                          action="/delete_user/{{ user.id }}">
-
-                        <button class="btn btn-danger btn-sm">
-                            Delete
-                        </button>
-
-                    </form>
-
-                    {% endif %}
-
-                </td>
-
-            </tr>
-
-            {% endfor %}
-
-        </tbody>
-
-    </table>
-
-</div>
-
-</body>
-
-</html>
+</table>
