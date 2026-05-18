@@ -21,6 +21,13 @@ def get_db_connection():
 
 
 # =========================
+# ADMIN CHECK (role-based)
+# =========================
+def is_admin():
+    return session.get('role') == 'admin'
+
+
+# =========================
 # INIT DB
 # =========================
 def init_db():
@@ -37,6 +44,19 @@ def init_db():
                 email TEXT UNIQUE,
                 password TEXT
             );
+        """)
+
+        # ROLE COLUMN FOR USER / ADMIN
+        cur.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
+        """)
+
+        cur.execute("""
+            UPDATE users
+            SET role = 'admin'
+            WHERE username = 'admin'
+              AND (role IS NULL OR role = 'user' OR role = '');
         """)
 
         cur.execute("""
@@ -88,9 +108,9 @@ def init_db():
         if not cur.fetchone():
 
             cur.execute("""
-                INSERT INTO users (username, email, password)
-                VALUES (%s,%s,%s)
-            """, ("admin", "admin@gmail.com", "admin123"))
+                INSERT INTO users (username, email, password, role)
+                VALUES (%s,%s,%s,%s)
+            """, ("admin", "admin@gmail.com", "admin123", "admin"))
 
         conn.commit()
 
@@ -186,6 +206,9 @@ def login():
 
             session['user'] = user['username']
             session['email'] = user['email']
+            session['role'] = user.get('role') if user.get('role') else (
+                'admin' if user['username'] == 'admin' else 'user'
+            )
 
             log_access(user['email'], "LOGIN")
 
@@ -202,7 +225,7 @@ def login():
 @app.route('/admin')
 def admin():
 
-    if session.get('user') != 'admin':
+    if not is_admin():
         return redirect(url_for('login'))
 
     conn = get_db_connection()
@@ -231,21 +254,26 @@ def admin():
 @app.route('/add_user', methods=['POST'])
 def add_user():
 
-    if session.get('user') != 'admin':
+    if not is_admin():
         return redirect(url_for('login'))
 
     try:
+
+        role = request.form.get('role', 'user')
+        if role not in ('user', 'admin'):
+            role = 'user'
 
         conn = get_db_connection()
         cur = conn.cursor()
 
         cur.execute("""
-            INSERT INTO users (username,email,password)
-            VALUES (%s,%s,%s)
+            INSERT INTO users (username, email, password, role)
+            VALUES (%s,%s,%s,%s)
         """, (
             request.form['username'],
             request.form['email'],
-            request.form['password']
+            request.form['password'],
+            role
         ))
 
         conn.commit()
@@ -268,6 +296,9 @@ def add_user():
 # =========================
 @app.route('/delete_user/<int:id>', methods=['POST'])
 def delete_user(id):
+
+    if not is_admin():
+        return redirect(url_for('login'))
 
     conn = get_db_connection()
     cur = conn.cursor()
