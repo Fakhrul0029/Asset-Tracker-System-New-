@@ -1,8 +1,5 @@
-<!DOCTYPE html>
 <html>
-
 <head>
-
     <title>ASSETS TRACKING - Dashboard</title>
 
     <link rel="stylesheet"
@@ -11,7 +8,6 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <style>
-
         .stat-card {
             padding: 20px;
             border-radius: 8px;
@@ -20,13 +16,11 @@
             font-weight: bold;
         }
 
-        .bg-black { background:#212529; }
-        .bg-green { background:#198754; }
-        .bg-yellow { background:#ffc107; color:#212529 !important; }
-        .bg-red { background:#dc3545; }
-
+        .bg-black { background: #212529; }
+        .bg-green { background: #198754; }
+        .bg-yellow { background: #ffc107; color: #212529 !important; }
+        .bg-red { background: #dc3545; }
     </style>
-
 </head>
 
 <body class="p-5 bg-light">
@@ -36,65 +30,41 @@
     <!-- TOP BAR -->
     <div class="d-flex justify-content-between align-items-center">
 
-        <h3 class="fw-bold">
-            JPKN ASSET TRACKING
-        </h3>
+        <h3 class="fw-bold">JPKN ASSET TRACKING</h3>
 
         <div class="d-flex gap-2">
 
-            <a href="/export" class="btn btn-success btn-sm">
-                📊 Export CSV
-            </a>
-
-            <a href="/activity" class="btn btn-dark btn-sm">
-                Activity Log
-            </a>
-
-            <a href="/add" class="btn btn-primary btn-sm">
-                + Add Hardware
-            </a>
+            <a href="/export" class="btn btn-success btn-sm">📊 Export CSV</a>
+            <a href="/activity" class="btn btn-dark btn-sm">Activity Log</a>
+            <a href="/add" class="btn btn-primary btn-sm">+ Add Hardware</a>
 
             {% if session['role'] == 'admin' %}
-
-            <a href="/admin" class="btn btn-warning btn-sm">
-                Admin Panel
-            </a>
-
+            <a href="/admin" class="btn btn-warning btn-sm">Admin Panel</a>
             {% endif %}
 
-            <a href="/logout" class="btn btn-outline-danger btn-sm">
-                Logout
-            </a>
+            <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
 
         </div>
 
     </div>
 
-    <!-- STATS -->
+    <!-- DASHBOARD COUNTERS -->
     <div class="row mt-4 g-3">
 
         <div class="col-md-3">
-            <div class="stat-card bg-black">
-                Total: {{ total }}
-            </div>
+            <div class="stat-card bg-black">Total: {{ total }}</div>
         </div>
 
         <div class="col-md-3">
-            <div class="stat-card bg-green">
-                Working: {{ working }}
-            </div>
+            <div class="stat-card bg-green">Working: {{ working }}</div>
         </div>
 
         <div class="col-md-3">
-            <div class="stat-card bg-yellow">
-                Maintenance: {{ maintenance }}
-            </div>
+            <div class="stat-card bg-yellow">Maintenance: {{ maintenance }}</div>
         </div>
 
         <div class="col-md-3">
-            <div class="stat-card bg-red">
-                Faulty: {{ faulty }}
-            </div>
+            <div class="stat-card bg-red">Faulty: {{ faulty }}</div>
         </div>
 
     </div>
@@ -103,23 +73,20 @@
     <div class="row mt-4 g-2">
 
         <div class="col-md-8">
-            <input type="text" id="liveSearch"
+            <input type="text"
+                   id="liveSearch"
                    class="form-control"
-                   placeholder="Search assets...">
+                   placeholder="Search Tracking No, S/N, or Agency...">
         </div>
 
         <div class="col-md-4">
-
             <select id="typeFilter" class="form-select">
-
                 <option value="">All Categories</option>
-                <option value="Laptop">Laptop</option>
-                <option value="PC">PC</option>
-                <option value="Monitor">Monitor</option>
-                <option value="Printer">Printer</option>
-
+                <option value="Laptop">Laptops</option>
+                <option value="PC">PCs</option>
+                <option value="Monitor">Monitors</option>
+                <option value="Printer">Printers</option>
             </select>
-
         </div>
 
     </div>
@@ -128,15 +95,17 @@
     <table class="table mt-3 table-hover">
 
         <thead class="table-dark">
+
             <tr>
                 <th>Type</th>
-                <th>Tracking</th>
-                <th>Model</th>
+                <th>Tracking No</th>
+                <th>Brand/Model</th>
                 <th>S/N</th>
                 <th>Status</th>
                 <th>Agency</th>
                 <th>Action</th>
             </tr>
+
         </thead>
 
         <tbody id="assetTable">
@@ -149,14 +118,19 @@
                     <span class="badge bg-secondary">
                         {{ row.asset_type }}
                     </span>
+
+                    {% if row.deleted %}
+                        <span class="badge bg-danger">DELETED</span>
+                    {% endif %}
                 </td>
 
                 <td><strong>{{ row.tracking_number }}</strong></td>
+
                 <td>{{ row.cpu_name }}</td>
+
                 <td><code>{{ row.serial_number }}</code></td>
 
                 <td>
-
                     <span class="badge
                         {% if row.status == 'Working' %}
                             bg-success
@@ -168,7 +142,6 @@
                     ">
                         {{ row.status }}
                     </span>
-
                 </td>
 
                 <td>{{ row.location }}</td>
@@ -187,7 +160,7 @@
 
                     <form action="/delete/{{ row.id }}"
                           method="POST"
-                          onsubmit="return confirm('Delete this asset?');">
+                          onsubmit="return confirm('Delete?');">
 
                         <button class="btn btn-sm btn-danger">
                             Del
