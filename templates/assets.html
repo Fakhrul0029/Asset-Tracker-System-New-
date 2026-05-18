@@ -1,10 +1,9 @@
+<assets html>
 <html>
 <head>
     <title>ASSETS TRACKING - Dashboard</title>
 
-    <link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <style>
@@ -16,202 +15,296 @@
             font-weight: bold;
         }
 
-        .bg-black { background: #212529; }
-        .bg-green { background: #198754; }
-        .bg-yellow { background: #ffc107; color: #212529 !important; }
-        .bg-red { background: #dc3545; }
+        .bg-black {
+            background: #212529;
+        }
+
+        .bg-green {
+            background: #198754;
+        }
+
+        .bg-yellow {
+            background: #ffc107;
+            color: #212529 !important;
+        }
+
+        .bg-red {
+            background: #dc3545;
+        }
     </style>
 </head>
 
 <body class="p-5 bg-light">
 
-<div class="container bg-white p-4 rounded shadow">
+    <div class="container bg-white p-4 rounded shadow">
 
-    <!-- TOP BAR -->
-    <div class="d-flex justify-content-between align-items-center">
+        <!-- TOP BAR -->
+        <div class="d-flex justify-content-between align-items-center">
 
-        <h3 class="fw-bold">JPKN ASSET TRACKING</h3>
+            <h3 class="fw-bold">
+                JPKN ASSET TRACKING
+            </h3>
 
-        <div class="d-flex gap-2">
+            <div class="d-flex gap-2">
 
-            <a href="/export" class="btn btn-success btn-sm">📊 Export CSV</a>
-            <a href="/activity" class="btn btn-dark btn-sm">Activity Log</a>
-            <a href="/add" class="btn btn-primary btn-sm">+ Add Hardware</a>
+                <!-- EXPORT -->
+                <a href="/export" class="btn btn-success btn-sm">
+                    📊 Export CSV
+                </a>
 
-            {% if session['role'] == 'admin' %}
-            <a href="/admin" class="btn btn-warning btn-sm">Admin Panel</a>
-            {% endif %}
+                <!-- ACTIVITY LOG -->
+                <a href="/activity" class="btn btn-dark btn-sm">
+                    Activity Log
+                </a>
 
-            <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
+                <!-- ADD -->
+                <a href="/add" class="btn btn-primary btn-sm">
+                    + Add Hardware
+                </a>
+
+                <!-- ADMIN -->
+                {% if session['user'] == 'admin' %}
+                <a href="/admin" class="btn btn-warning btn-sm">
+                    Admin Panel
+                </a>
+                {% endif %}
+
+                <!-- LOGOUT -->
+                <a href="/logout" class="btn btn-outline-danger btn-sm">
+                    Logout
+                </a>
+
+            </div>
 
         </div>
+
+        <!-- DASHBOARD COUNTERS -->
+        <div class="row mt-4 g-3">
+
+            <div class="col-md-3">
+                <div class="stat-card bg-black shadow-sm">
+                    Total: {{ total }}
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stat-card bg-green shadow-sm">
+                    Working: {{ working }}
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stat-card bg-yellow shadow-sm">
+                    Maintenance: {{ maintenance }}
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stat-card bg-red shadow-sm">
+                    Faulty: {{ faulty }}
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SEARCH + FILTER -->
+        <div class="row mt-4 g-2">
+
+            <div class="col-md-8">
+                <input
+                    type="text"
+                    id="liveSearch"
+                    class="form-control"
+                    placeholder="Search Tracking No, S/N, or Agency..."
+                >
+            </div>
+
+            <div class="col-md-4">
+
+                <select id="typeFilter" class="form-select">
+
+                    <option value="">
+                        All Categories
+                    </option>
+
+                    <option value="Laptop">
+                        Laptops
+                    </option>
+
+                    <option value="PC">
+                        PCs
+                    </option>
+
+                    <option value="Monitor">
+                        Monitors
+                    </option>
+
+                    <option value="Printer">
+                        Printers
+                    </option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+        <!-- TABLE -->
+        <table class="table mt-3 table-hover">
+
+            <thead class="table-dark">
+
+                <tr>
+                    <th>Type</th>
+                    <th>Tracking No</th>
+                    <th>Brand/Model</th>
+                    <th>S/N</th>
+                    <th>Status</th>
+                    <th>Agency</th>
+                    <th>Action</th>
+                </tr>
+
+            </thead>
+
+            <tbody id="assetTable">
+
+                {% for row in data %}
+
+                <tr data-type="{{ row.asset_type }}">
+
+                    <td>
+                        <span class="badge bg-secondary">
+                            {{ row.asset_type }}
+                        </span>
+                    </td>
+
+                    <td>
+                        <strong>
+                            {{ row.tracking_number }}
+                        </strong>
+                    </td>
+
+                    <td>
+                        {{ row.cpu_name }}
+                    </td>
+
+                    <td>
+                        <code>
+                            {{ row.serial_number }}
+                        </code>
+                    </td>
+
+                    <td>
+
+                        <span class="badge
+                            {% if row.status == 'Working' %}
+                                bg-success
+
+                            {% elif row.status == 'Maintenance' %}
+                                bg-warning text-dark
+
+                            {% else %}
+                                bg-danger
+                            {% endif %}
+                        ">
+
+                            {{ row.status }}
+
+                        </span>
+
+                    </td>
+
+                    <td>
+                        {{ row.location }}
+                    </td>
+
+                    <!-- ACTION BUTTONS -->
+                    <td class="d-flex gap-1">
+
+                        <!-- VIEW -->
+                        <a href="/asset/{{ row.id }}"
+                           class="btn btn-sm btn-info text-white">
+
+                            View
+
+                        </a>
+
+                        <!-- EDIT -->
+                        <a href="/edit/{{ row.id }}"
+                           class="btn btn-sm btn-warning">
+
+                            Edit
+
+                        </a>
+
+                        <!-- DELETE -->
+                        <form action="/delete/{{ row.id }}"
+                              method="POST"
+                              onsubmit="return confirm('Delete?');">
+
+                            <button class="btn btn-sm btn-danger">
+
+                                Del
+
+                            </button>
+
+                        </form>
+
+                        <!-- QR -->
+                        <a href="/qr/{{ row.id }}"
+                           class="btn btn-sm btn-dark">
+
+                            QR
+
+                        </a>
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
 
     </div>
 
-    <!-- DASHBOARD COUNTERS -->
-    <div class="row mt-4 g-3">
+    <!-- SEARCH FILTER SCRIPT -->
+    <script>
 
-        <div class="col-md-3">
-            <div class="stat-card bg-black">Total: {{ total }}</div>
-        </div>
+        $(document).ready(function(){
 
-        <div class="col-md-3">
-            <div class="stat-card bg-green">Working: {{ working }}</div>
-        </div>
+            function filter() {
 
-        <div class="col-md-3">
-            <div class="stat-card bg-yellow">Maintenance: {{ maintenance }}</div>
-        </div>
+                var s = $("#liveSearch").val().toLowerCase();
+                var t = $("#typeFilter").val().toLowerCase();
 
-        <div class="col-md-3">
-            <div class="stat-card bg-red">Faulty: {{ faulty }}</div>
-        </div>
+                $("#assetTable tr").filter(function() {
 
-    </div>
+                    $(this).toggle(
 
-    <!-- SEARCH -->
-    <div class="row mt-4 g-2">
+                        $(this).text().toLowerCase().indexOf(s) > -1 &&
 
-        <div class="col-md-8">
-            <input type="text"
-                   id="liveSearch"
-                   class="form-control"
-                   placeholder="Search Tracking No, S/N, or Agency...">
-        </div>
+                        (
+                            t === "" ||
 
-        <div class="col-md-4">
-            <select id="typeFilter" class="form-select">
-                <option value="">All Categories</option>
-                <option value="Laptop">Laptops</option>
-                <option value="PC">PCs</option>
-                <option value="Monitor">Monitors</option>
-                <option value="Printer">Printers</option>
-            </select>
-        </div>
+                            $(this).attr("data-type").toLowerCase() === t
+                        )
 
-    </div>
+                    );
 
-    <!-- TABLE -->
-    <table class="table mt-3 table-hover">
+                });
 
-        <thead class="table-dark">
+            }
 
-            <tr>
-                <th>Type</th>
-                <th>Tracking No</th>
-                <th>Brand/Model</th>
-                <th>S/N</th>
-                <th>Status</th>
-                <th>Agency</th>
-                <th>Action</th>
-            </tr>
+            $("#liveSearch").on("keyup", filter);
 
-        </thead>
-
-        <tbody id="assetTable">
-
-            {% for row in data %}
-
-            <tr data-type="{{ row.asset_type }}">
-
-                <td>
-                    <span class="badge bg-secondary">
-                        {{ row.asset_type }}
-                    </span>
-
-                    {% if row.deleted %}
-                        <span class="badge bg-danger">DELETED</span>
-                    {% endif %}
-                </td>
-
-                <td><strong>{{ row.tracking_number }}</strong></td>
-
-                <td>{{ row.cpu_name }}</td>
-
-                <td><code>{{ row.serial_number }}</code></td>
-
-                <td>
-                    <span class="badge
-                        {% if row.status == 'Working' %}
-                            bg-success
-                        {% elif row.status == 'Maintenance' %}
-                            bg-warning text-dark
-                        {% else %}
-                            bg-danger
-                        {% endif %}
-                    ">
-                        {{ row.status }}
-                    </span>
-                </td>
-
-                <td>{{ row.location }}</td>
-
-                <td class="d-flex gap-1">
-
-                    <a href="/asset/{{ row.id }}"
-                       class="btn btn-sm btn-info text-white">
-                        View
-                    </a>
-
-                    <a href="/edit/{{ row.id }}"
-                       class="btn btn-sm btn-warning">
-                        Edit
-                    </a>
-
-                    <form action="/delete/{{ row.id }}"
-                          method="POST"
-                          onsubmit="return confirm('Delete?');">
-
-                        <button class="btn btn-sm btn-danger">
-                            Del
-                        </button>
-
-                    </form>
-
-                    <a href="/qr/{{ row.id }}"
-                       class="btn btn-sm btn-dark">
-                        QR
-                    </a>
-
-                </td>
-
-            </tr>
-
-            {% endfor %}
-
-        </tbody>
-
-    </table>
-
-</div>
-
-<!-- FILTER SCRIPT -->
-<script>
-
-$(document).ready(function(){
-
-    function filter() {
-
-        var s = $("#liveSearch").val().toLowerCase();
-        var t = $("#typeFilter").val().toLowerCase();
-
-        $("#assetTable tr").filter(function() {
-
-            $(this).toggle(
-                $(this).text().toLowerCase().indexOf(s) > -1 &&
-                (t === "" || $(this).attr("data-type").toLowerCase() === t)
-            );
+            $("#typeFilter").on("change", filter);
 
         });
 
-    }
-
-    $("#liveSearch").on("keyup", filter);
-    $("#typeFilter").on("change", filter);
-
-});
-
-</script>
+    </script>
 
 </body>
 </html>
