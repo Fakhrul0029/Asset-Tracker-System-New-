@@ -76,7 +76,7 @@ def init_db():
             );
         """)
 
-        # DEFAULT ADMIN
+        # default admin
         cur.execute("SELECT * FROM users WHERE username='admin'")
         if not cur.fetchone():
             cur.execute("""
@@ -99,33 +99,30 @@ init_db()
 
 
 # =========================
-# ROLE SYNC (IMPORTANT FIX)
+# GET CURRENT USER (IMPORTANT CORE FIX)
 # =========================
-def sync_role():
-    """
-    Always sync session role with database
-    so newly promoted admin works immediately.
-    """
+def get_current_user():
+
     if 'email' not in session:
-        return
+        return None
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT role FROM users WHERE email=%s", (session['email'],))
+    cur.execute("SELECT * FROM users WHERE email=%s", (session['email'],))
     user = cur.fetchone()
-
-    if user:
-        session['role'] = user['role']
 
     cur.close()
     conn.close()
+
+    return user
 
 
 # =========================
 # LOGS
 # =========================
 def log_action(email, action, serial):
+
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -140,6 +137,7 @@ def log_action(email, action, serial):
 
 
 def log_access(email, action):
+
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -185,9 +183,8 @@ def login():
         conn.close()
 
         if user:
-            session['user'] = user['username']
             session['email'] = user['email']
-            session['role'] = user['role']
+            session['user'] = user['username']
 
             log_access(user['email'], "LOGIN")
 
@@ -199,102 +196,15 @@ def login():
 
 
 # =========================
-# ADMIN PANEL (AUTO SYNC ROLE)
-# =========================
-@app.route('/admin')
-def admin():
-
-    sync_role()  # 🔥 KEY FIX
-
-    if session.get('role') != 'admin':
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-    cur.execute("SELECT * FROM users ORDER BY id DESC")
-    users = cur.fetchall()
-
-    cur.execute("SELECT * FROM access_logs ORDER BY created_at DESC LIMIT 20")
-    access_logs = cur.fetchall()
-
-    cur.close()
-    conn.close()
-
-    return render_template("admin.html", users=users, access_logs=access_logs)
-
-
-# =========================
-# ADD USER (ADMIN OR USER)
-# =========================
-@app.route('/add_user', methods=['POST'])
-def add_user():
-
-    sync_role()
-
-    if session.get('role') != 'admin':
-        return redirect(url_for('login'))
-
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        cur.execute("""
-            INSERT INTO users (username, email, password, role)
-            VALUES (%s,%s,%s,%s)
-        """, (
-            request.form['username'],
-            request.form['email'],
-            request.form['password'],
-            request.form['role']
-        ))
-
-        conn.commit()
-
-    except Exception:
-        conn.rollback()
-        flash("User already exists or invalid data!")
-
-    finally:
-        cur.close()
-        conn.close()
-
-    return redirect(url_for('admin'))
-
-
-# =========================
-# DELETE USER
-# =========================
-@app.route('/delete_user/<int:id>', methods=['POST'])
-def delete_user(id):
-
-    sync_role()
-
-    if session.get('role') != 'admin':
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("DELETE FROM users WHERE id=%s", (id,))
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return redirect(url_for('admin'))
-
-
-# =========================
-# DASHBOARD
+# INDEX
 # =========================
 @app.route('/')
 def index():
 
-    if 'user' not in session:
-        return redirect(url_for('login'))
+    user = get_current_user()
 
-    sync_role()  # 🔥 ensures UI updates instantly
+    if not user:
+        return redirect(url_for('login'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -315,27 +225,98 @@ def index():
                            total=total,
                            working=working,
                            maintenance=maintenance,
-                           faulty=faulty)
+                           faulty=faulty,
+                           user=user)
 
 
 # =========================
-# ACTIVITY LOG
+# ADMIN (DB ROLE CHECK ONLY)
 # =========================
-@app.route('/activity')
-def activity():
+@app.route('/admin')
+def admin():
 
-    sync_role()
+    user = get_current_user()
+
+    if not user or user['role'] != 'admin':
+        return redirect(url_for('login'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT * FROM activity_logs ORDER BY created_at DESC")
-    logs = cur.fetchall()
+    cur.execute("SELECT * FROM users ORDER BY id DESC")
+    users = cur.fetchall()
+
+    cur.execute("SELECT * FROM access_logs ORDER BY created_at DESC LIMIT 20")
+    access_logs = cur.fetchall()
 
     cur.close()
     conn.close()
 
-    return render_template("activity.html", logs=logs)
+    return render_template("admin.html",
+                           users=users,
+                           access_logs=access_logs,
+                           user=user)
+
+
+# =========================
+# ADD USER (ADMIN ONLY)
+# =========================
+@app.route('/add_user', methods=['POST'])
+def add_user():
+
+    user = get_current_user()
+
+    if not user or user['role'] != 'admin':
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            INSERT INTO users (username, email, password, role)
+            VALUES (%s,%s,%s,%s)
+        """, (
+            request.form['username'],
+            request.form['email'],
+            request.form['password'],
+            request.form['role']
+        ))
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        flash("Error creating user")
+
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for('admin'))
+
+
+# =========================
+# DELETE USER
+# =========================
+@app.route('/delete_user/<int:id>', methods=['POST'])
+def delete_user(id):
+
+    user = get_current_user()
+
+    if not user or user['role'] != 'admin':
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM users WHERE id=%s", (id,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect(url_for('admin'))
 
 
 # =========================
