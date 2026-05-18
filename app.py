@@ -125,6 +125,9 @@ def init_db():
 init_db()
 
 
+# =========================
+# ACTIVITY LOG
+# =========================
 def log_action(email, action, serial):
 
     conn = get_db_connection()
@@ -136,10 +139,14 @@ def log_action(email, action, serial):
     """, (email, action, serial))
 
     conn.commit()
+
     cur.close()
     conn.close()
 
 
+# =========================
+# ACCESS LOG
+# =========================
 def log_access(email, action):
 
     conn = get_db_connection()
@@ -151,24 +158,35 @@ def log_access(email, action):
     """, (email, action))
 
     conn.commit()
+
     cur.close()
     conn.close()
 
 
+# =========================
+# QR GENERATOR
+# =========================
 def generate_qr(data):
 
     img = qrcode.make(data)
+
     buffer = io.BytesIO()
+
     img.save(buffer, format="PNG")
+
     return base64.b64encode(buffer.getvalue()).decode()
 
 
+# =========================
+# LOGIN
+# =========================
 @app.route('/login', methods=['GET', 'POST'])
 def login():
 
     if request.method == 'POST':
 
         conn = get_db_connection()
+
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
         cur.execute("""
@@ -177,6 +195,7 @@ def login():
         """, (request.form['email'], request.form['password']))
 
         user = cur.fetchone()
+
         cur.close()
         conn.close()
 
@@ -189,6 +208,7 @@ def login():
             )
 
             log_access(user['email'], "LOGIN")
+
             return redirect(url_for('index'))
 
         flash("Invalid login")
@@ -196,6 +216,9 @@ def login():
     return render_template("login.html")
 
 
+# =========================
+# ADMIN PANEL
+# =========================
 @app.route('/admin')
 def admin():
 
@@ -203,6 +226,7 @@ def admin():
         return redirect(url_for('login'))
 
     conn = get_db_connection()
+
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     cur.execute("SELECT * FROM users ORDER BY id DESC")
@@ -214,9 +238,16 @@ def admin():
     cur.close()
     conn.close()
 
-    return render_template("admin.html", users=users, access_logs=access_logs)
+    return render_template(
+        "admin.html",
+        users=users,
+        access_logs=access_logs
+    )
 
 
+# =========================
+# ADD USER
+# =========================
 @app.route('/add_user', methods=['POST'])
 def add_user():
 
@@ -257,6 +288,9 @@ def add_user():
     return redirect(url_for('admin'))
 
 
+# =========================
+# DELETE USER
+# =========================
 @app.route('/delete_user/<int:id>', methods=['POST'])
 def delete_user(id):
 
@@ -267,6 +301,7 @@ def delete_user(id):
     cur = conn.cursor()
 
     cur.execute("DELETE FROM users WHERE id=%s", (id,))
+
     conn.commit()
 
     cur.close()
@@ -275,6 +310,9 @@ def delete_user(id):
     return redirect(url_for('admin'))
 
 
+# =========================
+# DASHBOARD
+# =========================
 @app.route('/')
 def index():
 
@@ -282,9 +320,11 @@ def index():
         return redirect(url_for('login'))
 
     conn = get_db_connection()
+
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     cur.execute("SELECT * FROM assets ORDER BY id DESC")
+
     data = cur.fetchall()
 
     total = len(data)
@@ -305,39 +345,53 @@ def index():
     )
 
 
+# =========================
+# VIEW ASSET
+# =========================
 @app.route('/asset/<int:id>')
 def view(id):
 
     conn = get_db_connection()
+
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     cur.execute("SELECT * FROM assets WHERE id=%s", (id,))
+
     asset = cur.fetchone()
 
     cur.execute("""
-        UPDATE assets SET scan_count = scan_count + 1 WHERE id=%s
+        UPDATE assets
+        SET scan_count = scan_count + 1
+        WHERE id=%s
     """, (id,))
 
     conn.commit()
+
     cur.close()
     conn.close()
 
     return render_template("view.html", asset=asset)
 
 
+# =========================
+# QR
+# =========================
 @app.route('/qr/<int:id>')
 def qr(id):
 
     conn = get_db_connection()
+
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     cur.execute("SELECT * FROM assets WHERE id=%s", (id,))
+
     asset = cur.fetchone()
 
     cur.close()
     conn.close()
 
     qr_data = url_for('view', id=id, _external=True)
+
     qr_code = generate_qr(qr_data)
 
     return render_template(
@@ -348,6 +402,9 @@ def qr(id):
     )
 
 
+# =========================
+# ADD ASSET
+# =========================
 @app.route('/add', methods=['GET', 'POST'])
 def add():
 
@@ -363,8 +420,15 @@ def add():
 
             cur.execute("""
                 INSERT INTO assets (
-                    asset_type, tracking_number, cpu_name, serial_number,
-                    ram_size, storage_type, status, location, description
+                    asset_type,
+                    tracking_number,
+                    cpu_name,
+                    serial_number,
+                    ram_size,
+                    storage_type,
+                    status,
+                    location,
+                    description
                 )
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (
@@ -381,9 +445,13 @@ def add():
 
             conn.commit()
 
-            log_action(session['email'], "ASSET REGISTERED", request.form['serial_number'])
+            log_action(
+                session['email'],
+                "ASSET REGISTERED",
+                request.form['serial_number']
+            )
 
-        except Exception:
+        except Exception as e:
 
             conn.rollback()
             flash("Error adding asset: serial number may already exist")
@@ -398,6 +466,9 @@ def add():
     return render_template("add.html")
 
 
+# =========================
+# EDIT ASSET
+# =========================
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
 
@@ -405,9 +476,11 @@ def edit(id):
         return redirect(url_for('login'))
 
     conn = get_db_connection()
+
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     cur.execute("SELECT * FROM assets WHERE id=%s", (id,))
+
     asset = cur.fetchone()
 
     if request.method == 'POST':
@@ -415,10 +488,17 @@ def edit(id):
         try:
 
             cur.execute("""
-                UPDATE assets SET
-                    asset_type=%s, tracking_number=%s, cpu_name=%s,
-                    ram_size=%s, storage_type=%s, location=%s,
-                    status=%s, serial_number=%s, description=%s
+                UPDATE assets
+                SET
+                    asset_type=%s,
+                    tracking_number=%s,
+                    cpu_name=%s,
+                    ram_size=%s,
+                    storage_type=%s,
+                    location=%s,
+                    status=%s,
+                    serial_number=%s,
+                    description=%s
                 WHERE id=%s
             """, (
                 request.form['asset_type'],
@@ -434,7 +514,12 @@ def edit(id):
             ))
 
             conn.commit()
-            log_action(session['email'], "ASSET UPDATED", request.form['serial_number'])
+
+            log_action(
+                session['email'],
+                "ASSET UPDATED",
+                request.form['serial_number']
+            )
 
         except Exception:
 
@@ -454,19 +539,29 @@ def edit(id):
     return render_template("edit.html", asset=asset)
 
 
+# =========================
+# DELETE ASSET
+# =========================
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete(id):
 
     conn = get_db_connection()
+
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     cur.execute("SELECT serial_number FROM assets WHERE id=%s", (id,))
+
     asset = cur.fetchone()
 
     cur.execute("DELETE FROM assets WHERE id=%s", (id,))
+
     conn.commit()
 
-    log_action(session['email'], "ASSET DELETED", asset['serial_number'])
+    log_action(
+        session['email'],
+        "ASSET DELETED",
+        asset['serial_number']
+    )
 
     cur.close()
     conn.close()
@@ -474,6 +569,9 @@ def delete(id):
     return redirect(url_for('index'))
 
 
+# =========================
+# EXPORT CSV
+# =========================
 @app.route('/export')
 def export():
 
@@ -481,28 +579,45 @@ def export():
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM assets")
+
     rows = cur.fetchall()
 
     output = io.StringIO()
+
     writer = csv.writer(output)
+
     writer.writerow([desc[0] for desc in cur.description])
+
     writer.writerows(rows)
+
     output.seek(0)
 
     return Response(
         output.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment;filename=assets.csv"}
+        headers={
+            "Content-Disposition":
+            "attachment;filename=assets.csv"
+        }
     )
 
 
+# =========================
+# ACTIVITY
+# =========================
 @app.route('/activity')
 def activity():
 
     conn = get_db_connection()
+
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT * FROM activity_logs ORDER BY created_at DESC")
+    cur.execute("""
+        SELECT *
+        FROM activity_logs
+        ORDER BY created_at DESC
+    """)
+
     logs = cur.fetchall()
 
     cur.close()
@@ -511,6 +626,9 @@ def activity():
     return render_template("activity.html", logs=logs)
 
 
+# =========================
+# LOGOUT
+# =========================
 @app.route('/logout')
 def logout():
 
@@ -518,6 +636,7 @@ def logout():
         log_access(session['email'], "LOGOUT")
 
     session.clear()
+
     return redirect(url_for('login'))
 
 
