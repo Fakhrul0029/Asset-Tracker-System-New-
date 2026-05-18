@@ -24,7 +24,6 @@ def get_db_connection():
 # INIT DB
 # =========================
 def init_db():
-
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -99,10 +98,9 @@ init_db()
 
 
 # =========================
-# GET CURRENT USER (IMPORTANT CORE FIX)
+# GET CURRENT USER (DB AUTHORITATIVE)
 # =========================
 def get_current_user():
-
     if 'email' not in session:
         return None
 
@@ -116,49 +114,6 @@ def get_current_user():
     conn.close()
 
     return user
-
-
-# =========================
-# LOGS
-# =========================
-def log_action(email, action, serial):
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO activity_logs (user_email, action, asset_serial)
-        VALUES (%s,%s,%s)
-    """, (email, action, serial))
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-
-def log_access(email, action):
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO access_logs (user_email, action)
-        VALUES (%s,%s)
-    """, (email, action))
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-
-# =========================
-# QR
-# =========================
-def generate_qr(data):
-    img = qrcode.make(data)
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    return base64.b64encode(buffer.getvalue()).decode()
 
 
 # =========================
@@ -184,10 +139,8 @@ def login():
 
         if user:
             session['email'] = user['email']
-            session['user'] = user['username']
-
+            session['username'] = user['username']
             log_access(user['email'], "LOGIN")
-
             return redirect(url_for('index'))
 
         flash("Invalid login")
@@ -212,33 +165,25 @@ def index():
     cur.execute("SELECT * FROM assets ORDER BY id DESC")
     data = cur.fetchall()
 
-    total = len(data)
-    working = len([x for x in data if x['status'] == 'Working'])
-    maintenance = len([x for x in data if x['status'] == 'Maintenance'])
-    faulty = len([x for x in data if x['status'] == 'Faulty'])
-
     cur.close()
     conn.close()
 
-    return render_template("assets.html",
-                           data=data,
-                           total=total,
-                           working=working,
-                           maintenance=maintenance,
-                           faulty=faulty,
-                           user=user)
+    return render_template("assets.html", data=data, user=user)
 
 
 # =========================
-# ADMIN (DB ROLE CHECK ONLY)
+# ADMIN (STRICT DB CHECK)
 # =========================
 @app.route('/admin')
 def admin():
 
     user = get_current_user()
 
-    if not user or user['role'] != 'admin':
+    if not user:
         return redirect(url_for('login'))
+
+    if user['role'] != 'admin':
+        return redirect(url_for('index'))
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -247,19 +192,16 @@ def admin():
     users = cur.fetchall()
 
     cur.execute("SELECT * FROM access_logs ORDER BY created_at DESC LIMIT 20")
-    access_logs = cur.fetchall()
+    logs = cur.fetchall()
 
     cur.close()
     conn.close()
 
-    return render_template("admin.html",
-                           users=users,
-                           access_logs=access_logs,
-                           user=user)
+    return render_template("admin.html", users=users, access_logs=logs, user=user)
 
 
 # =========================
-# ADD USER (ADMIN ONLY)
+# ADD USER
 # =========================
 @app.route('/add_user', methods=['POST'])
 def add_user():
@@ -330,6 +272,23 @@ def logout():
 
     session.clear()
     return redirect(url_for('login'))
+
+
+# =========================
+# LOG FUNCTIONS
+# =========================
+def log_access(email, action):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO access_logs (user_email, action)
+        VALUES (%s,%s)
+    """, (email, action))
+
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 if __name__ == "__main__":
