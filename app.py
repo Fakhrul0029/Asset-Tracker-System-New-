@@ -29,7 +29,6 @@ def init_db():
     cur = conn.cursor()
 
     try:
-        # USERS TABLE (UPDATED WITH ROLE)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -40,7 +39,6 @@ def init_db():
             );
         """)
 
-        # ASSETS TABLE
         cur.execute("""
             CREATE TABLE IF NOT EXISTS assets (
                 id SERIAL PRIMARY KEY,
@@ -60,12 +58,6 @@ def init_db():
         """)
 
         cur.execute("""
-            ALTER TABLE assets
-            ADD COLUMN IF NOT EXISTS description TEXT;
-        """)
-
-        # ACTIVITY LOG
-        cur.execute("""
             CREATE TABLE IF NOT EXISTS activity_logs (
                 id SERIAL PRIMARY KEY,
                 user_email TEXT,
@@ -75,7 +67,6 @@ def init_db():
             );
         """)
 
-        # ACCESS LOG
         cur.execute("""
             CREATE TABLE IF NOT EXISTS access_logs (
                 id SERIAL PRIMARY KEY,
@@ -85,7 +76,7 @@ def init_db():
             );
         """)
 
-        # CREATE DEFAULT ADMIN (WITH ROLE)
+        # DEFAULT ADMIN
         cur.execute("SELECT * FROM users WHERE username='admin'")
         if not cur.fetchone():
             cur.execute("""
@@ -105,6 +96,30 @@ def init_db():
 
 
 init_db()
+
+
+# =========================
+# ROLE SYNC (IMPORTANT FIX)
+# =========================
+def sync_role():
+    """
+    Always sync session role with database
+    so newly promoted admin works immediately.
+    """
+    if 'email' not in session:
+        return
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur.execute("SELECT role FROM users WHERE email=%s", (session['email'],))
+    user = cur.fetchone()
+
+    if user:
+        session['role'] = user['role']
+
+    cur.close()
+    conn.close()
 
 
 # =========================
@@ -184,10 +199,12 @@ def login():
 
 
 # =========================
-# ADMIN PANEL
+# ADMIN PANEL (AUTO SYNC ROLE)
 # =========================
 @app.route('/admin')
 def admin():
+
+    sync_role()  # 🔥 KEY FIX
 
     if session.get('role') != 'admin':
         return redirect(url_for('login'))
@@ -208,10 +225,12 @@ def admin():
 
 
 # =========================
-# ADD USER (ROLE SUPPORT)
+# ADD USER (ADMIN OR USER)
 # =========================
 @app.route('/add_user', methods=['POST'])
 def add_user():
+
+    sync_role()
 
     if session.get('role') != 'admin':
         return redirect(url_for('login'))
@@ -249,6 +268,8 @@ def add_user():
 @app.route('/delete_user/<int:id>', methods=['POST'])
 def delete_user(id):
 
+    sync_role()
+
     if session.get('role') != 'admin':
         return redirect(url_for('login'))
 
@@ -273,6 +294,8 @@ def index():
     if 'user' not in session:
         return redirect(url_for('login'))
 
+    sync_role()  # 🔥 ensures UI updates instantly
+
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
@@ -296,11 +319,12 @@ def index():
 
 
 # =========================
-# OTHER ROUTES (UNCHANGED BELOW)
+# ACTIVITY LOG
 # =========================
-
 @app.route('/activity')
 def activity():
+
+    sync_role()
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -314,6 +338,9 @@ def activity():
     return render_template("activity.html", logs=logs)
 
 
+# =========================
+# LOGOUT
+# =========================
 @app.route('/logout')
 def logout():
 
@@ -322,9 +349,6 @@ def logout():
 
     session.clear()
     return redirect(url_for('login'))
-
-
-# (ALL YOUR ASSET FUNCTIONS REMAIN SAME — NOT MODIFIED)
 
 
 if __name__ == "__main__":
