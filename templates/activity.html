@@ -59,17 +59,17 @@
 
 <body>
 
-    <div class="topbar">
+    <DIV class="topbar">
 
         <a href="/" class="btn">Dashboard</a>
 
-        {% if session['user'] == 'admin' %}
+        {% if session.get('role') == 'admin' %}
         <a href="/admin" class="btn">Admin Panel</a>
         {% endif %}
 
         <a href="/logout" class="btn">Logout</a>
 
-    </div>
+    </DIV>
 
     <h2>Activity Log</h2>
 
