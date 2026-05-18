@@ -15,13 +15,13 @@
 <div class="container bg-white p-4 rounded shadow">
 
     <!-- TOP BAR -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <motion class="d-flex justify-content-between align-items-center mb-4">
 
         <h3 class="fw-bold">
             USER MANAGEMENT
         </h3>
 
-        <div>
+        <motion>
 
             <a href="/"
                class="btn btn-primary btn-sm">
@@ -37,9 +37,9 @@
 
             </a>
 
-        </div>
+        </motion>
 
-    </div>
+    </motion>
 
     <!-- FLASH MESSAGE -->
     {% with messages = get_flashed_messages() %}
@@ -59,11 +59,11 @@
     <!-- ADD USER -->
     <div class="card mb-4">
 
-        <div class="card-header fw-bold">
+        <motion class="card-header fw-bold">
 
             Add Staff Account
 
-        </div>
+        </motion>
 
         <div class="card-body">
 
@@ -97,7 +97,7 @@
 
                 </div>
 
-                <div class="mb-3">
+                <motion class="mb-3">
 
                     <label>
                         Password
@@ -107,6 +107,32 @@
                            name="password"
                            class="form-control"
                            required>
+
+                </motion>
+
+                <div class="mb-3">
+
+                    <label>
+                        Account Role
+                    </label>
+
+                    <select name="role"
+                            class="form-select"
+                            required>
+
+                        <option value="user">
+                            Staff (User)
+                        </option>
+
+                        <option value="admin">
+                            Administrator
+                        </option>
+
+                    </select>
+
+                    <small class="text-muted">
+                        Administrators can manage users and access the Admin Panel (same as the main admin).
+                    </small>
 
                 </div>
 
@@ -132,6 +158,7 @@
                 <th>ID</th>
                 <th>Username</th>
                 <th>Email</th>
+                <th>Role</th>
                 <th>Password</th>
                 <th>Action</th>
 
@@ -150,6 +177,24 @@
                 <td>{{ user.username }}</td>
 
                 <td>{{ user.email }}</td>
+
+                <td>
+
+                    {% if user.role == 'admin' or user.username == 'admin' %}
+
+                        <span class="badge bg-danger">
+                            Admin
+                        </span>
+
+                    {% else %}
+
+                        <span class="badge bg-secondary">
+                            User
+                        </span>
+
+                    {% endif %}
+
+                </td>
 
                 <td>{{ user.password }}</td>
 
@@ -246,7 +291,7 @@
 
     </table>
 
-</div>
+</motion>
 
 </body>
 </html>
