@@ -12,15 +12,16 @@
 
 <body class="bg-light p-5">
 
-<div class="container bg-white p-4 rounded shadow">
+<DIV class="container bg-white p-4 rounded shadow">
 
-    <motion class="d-flex justify-content-between align-items-center mb-4">
+    <!-- TOP BAR -->
+    <DIV class="d-flex justify-content-between align-items-center mb-4">
 
         <h3 class="fw-bold">
             USER MANAGEMENT
         </h3>
 
-        <motion>
+        <DIV>
 
             <a href="/"
                class="btn btn-primary btn-sm">
@@ -36,38 +37,40 @@
 
             </a>
 
-        </motion>
+        </DIV>
 
-    </motion>
+    </DIV>
 
+    <!-- FLASH MESSAGE -->
     {% with messages = get_flashed_messages() %}
         {% if messages %}
             {% for m in messages %}
 
-            <div class="alert alert-info">
+            <DIV class="alert alert-info">
 
                 {{ m }}
 
-            </div>
+            </DIV>
 
             {% endfor %}
         {% endif %}
     {% endwith %}
 
-    <div class="card mb-4">
+    <!-- ADD USER -->
+    <DIV class="card mb-4">
 
-        <div class="card-header fw-bold">
+        <DIV class="card-header fw-bold">
 
             Add Staff Account
 
-        </motion>
+        </DIV>
 
-        <div class="card-body">
+        <DIV class="card-body">
 
             <form method="POST"
                   action="/add_user">
 
-                <div class="mb-3">
+                <DIV class="mb-3">
 
                     <label>
                         Staff Username
@@ -78,9 +81,9 @@
                            class="form-control"
                            required>
 
-                </div>
+                </DIV>
 
-                <div class="mb-3">
+                <DIV class="mb-3">
 
                     <label>
                         Staff Email
@@ -92,9 +95,9 @@
                            placeholder="example@gmail.com"
                            required>
 
-                </div>
+                </DIV>
 
-                <div class="mb-3">
+                <DIV class="mb-3">
 
                     <label>
                         Password
@@ -105,9 +108,9 @@
                            class="form-control"
                            required>
 
-                </div>
+                </DIV>
 
-                <motion class="mb-3">
+                <DIV class="mb-3">
 
                     <label>
                         Account Role
@@ -131,7 +134,7 @@
                         Administrators can manage users and access the Admin Panel.
                     </small>
 
-                </motion>
+                </DIV>
 
                 <button class="btn btn-success">
 
@@ -141,10 +144,11 @@
 
             </form>
 
-        </div>
+        </DIV>
 
-    </div>
+    </DIV>
 
+    <!-- USER TABLE -->
     <table class="table table-bordered table-hover">
 
         <thead class="table-dark">
@@ -221,6 +225,7 @@
 
     </table>
 
+    <!-- ACCESS LOG -->
     <hr class="my-5">
 
     <h4 class="fw-bold mb-3">
@@ -286,7 +291,7 @@
 
     </table>
 
-</div>
+</DIV>
 
 </body>
 </html>
