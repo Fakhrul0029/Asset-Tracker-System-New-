@@ -25,12 +25,16 @@
 
             <a href="/"
                class="btn btn-primary btn-sm">
+
                Asset System
+
             </a>
 
             <a href="/logout"
                class="btn btn-danger btn-sm">
+
                Logout
+
             </a>
 
         </div>
@@ -43,27 +47,35 @@
             {% for m in messages %}
 
             <div class="alert alert-info">
+
                 {{ m }}
+
             </div>
 
             {% endfor %}
         {% endif %}
     {% endwith %}
 
-    <!-- ADD USER (ROLE INCLUDED) -->
+    <!-- ADD USER -->
     <div class="card mb-4">
 
         <div class="card-header fw-bold">
+
             Add Staff Account
+
         </div>
 
         <div class="card-body">
 
-            <form method="POST" action="/add_user">
+            <form method="POST"
+                  action="/add_user">
 
                 <div class="mb-3">
 
-                    <label>Staff Username</label>
+                    <label>
+                        Staff Username
+                    </label>
+
                     <input type="text"
                            name="username"
                            class="form-control"
@@ -73,17 +85,24 @@
 
                 <div class="mb-3">
 
-                    <label>Staff Email</label>
+                    <label>
+                        Staff Email
+                    </label>
+
                     <input type="email"
                            name="email"
                            class="form-control"
+                           placeholder="example@gmail.com"
                            required>
 
                 </div>
 
                 <div class="mb-3">
 
-                    <label>Password</label>
+                    <label>
+                        Password
+                    </label>
+
                     <input type="text"
                            name="password"
                            class="form-control"
@@ -91,20 +110,10 @@
 
                 </div>
 
-                <!-- NEW ROLE FIELD -->
-                <div class="mb-3">
-
-                    <label>Role</label>
-
-                    <select name="role" class="form-select" required>
-                        <option value="user">User</option>
-                        <option value="admin">Admin</option>
-                    </select>
-
-                </div>
-
                 <button class="btn btn-success">
+
                     Add User
+
                 </button>
 
             </form>
@@ -119,12 +128,13 @@
         <thead class="table-dark">
 
             <tr>
+
                 <th>ID</th>
                 <th>Username</th>
                 <th>Email</th>
                 <th>Password</th>
-                <th>Role</th>
                 <th>Action</th>
+
             </tr>
 
         </thead>
@@ -136,14 +146,12 @@
             <tr>
 
                 <td>{{ user.id }}</td>
+
                 <td>{{ user.username }}</td>
+
                 <td>{{ user.email }}</td>
+
                 <td>{{ user.password }}</td>
-                <td>
-                    <span class="badge bg-secondary">
-                        {{ user.role }}
-                    </span>
-                </td>
 
                 <td>
 
@@ -153,7 +161,9 @@
                           action="/delete_user/{{ user.id }}">
 
                         <button class="btn btn-danger btn-sm">
+
                             Delete
+
                         </button>
 
                     </form>
@@ -174,7 +184,9 @@
     <hr class="my-5">
 
     <h4 class="fw-bold mb-3">
+
         User Access Log
+
     </h4>
 
     <table class="table table-bordered table-hover">
@@ -182,10 +194,12 @@
         <thead class="table-dark">
 
             <tr>
+
                 <th>ID</th>
                 <th>User Email</th>
                 <th>Action</th>
                 <th>Time</th>
+
             </tr>
 
         </thead>
@@ -197,14 +211,29 @@
             <tr>
 
                 <td>{{ log.id }}</td>
+
                 <td>{{ log.user_email }}</td>
 
                 <td>
+
                     {% if log.action == 'LOGIN' %}
-                        <span class="badge bg-success">LOGIN</span>
+
+                        <span class="badge bg-success">
+
+                            LOGIN
+
+                        </span>
+
                     {% else %}
-                        <span class="badge bg-danger">LOGOUT</span>
+
+                        <span class="badge bg-danger">
+
+                            LOGOUT
+
+                        </span>
+
                     {% endif %}
+
                 </td>
 
                 <td>{{ log.created_at }}</td>
