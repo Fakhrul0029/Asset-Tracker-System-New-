@@ -33,14 +33,20 @@
 
         <div class="d-flex gap-2">
 
-            <a href="/export" class="btn btn-success btn-sm">📊 Export CSV</a>
+            <a href="/export" class="btn btn-success btn-sm">
+                📊 Export CSV
+            </a>
 
-            <a href="/activity" class="btn btn-dark btn-sm">Activity Log</a>
+            <a href="/activity" class="btn btn-dark btn-sm">
+                Activity Log
+            </a>
 
-            <a href="/add" class="btn btn-primary btn-sm">+ Add Hardware</a>
+            <a href="/add" class="btn btn-primary btn-sm">
+                + Add Hardware
+            </a>
 
-            <!-- 🔥 FIXED ADMIN CHECK -->
-            {% if user.role == 'admin' %}
+            <!-- 🔥 FIXED MULTI-ADMIN ACCESS -->
+            {% if session['role'] == 'admin' %}
             <a href="/admin" class="btn btn-warning btn-sm">
                 Admin Panel
             </a>
@@ -130,11 +136,17 @@
                     </span>
                 </td>
 
-                <td><strong>{{ row.tracking_number }}</strong></td>
+                <td>
+                    <strong>{{ row.tracking_number }}</strong>
+                </td>
 
-                <td>{{ row.cpu_name }}</td>
+                <td>
+                    {{ row.cpu_name }}
+                </td>
 
-                <td><code>{{ row.serial_number }}</code></td>
+                <td>
+                    <code>{{ row.serial_number }}</code>
+                </td>
 
                 <td>
                     <span class="badge
@@ -150,7 +162,9 @@
                     </span>
                 </td>
 
-                <td>{{ row.location }}</td>
+                <td>
+                    {{ row.location }}
+                </td>
 
                 <td class="d-flex gap-1">
 
