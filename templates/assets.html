@@ -36,16 +36,16 @@
 
 <body class="p-5 bg-light">
 
-    <div class="container bg-white p-4 rounded shadow">
+    <DIV class="container bg-white p-4 rounded shadow">
 
         <!-- TOP BAR -->
-        <div class="d-flex justify-content-between align-items-center">
+        <DIV class="d-flex justify-content-between align-items-center">
 
             <h3 class="fw-bold">
                 JPKN ASSET TRACKING
             </h3>
 
-            <div class="d-flex gap-2">
+            <DIV class="d-flex gap-2">
 
                 <!-- EXPORT -->
                 <a href="/export" class="btn btn-success btn-sm">
@@ -63,7 +63,7 @@
                 </a>
 
                 <!-- ADMIN -->
-                {% if session['user'] == 'admin' %}
+                {% if session.get('role') == 'admin' %}
                 <a href="/admin" class="btn btn-warning btn-sm">
                     Admin Panel
                 </a>
@@ -74,52 +74,52 @@
                     Logout
                 </a>
 
-            </div>
+            </DIV>
 
-        </div>
+        </DIV>
 
         <!-- DASHBOARD COUNTERS -->
-        <div class="row mt-4 g-3">
+        <DIV class="row mt-4 g-3">
 
-            <div class="col-md-3">
-                <div class="stat-card bg-black shadow-sm">
+            <DIV class="col-md-3">
+                <DIV class="stat-card bg-black shadow-sm">
                     Total: {{ total }}
-                </div>
-            </div>
+                </DIV>
+            </DIV>
 
-            <div class="col-md-3">
-                <div class="stat-card bg-green shadow-sm">
+            <DIV class="col-md-3">
+                <DIV class="stat-card bg-green shadow-sm">
                     Working: {{ working }}
-                </div>
-            </div>
+                </DIV>
+            </DIV>
 
-            <div class="col-md-3">
-                <div class="stat-card bg-yellow shadow-sm">
+            <DIV class="col-md-3">
+                <DIV class="stat-card bg-yellow shadow-sm">
                     Maintenance: {{ maintenance }}
-                </div>
-            </div>
+                </DIV>
+            </DIV>
 
-            <div class="col-md-3">
-                <div class="stat-card bg-red shadow-sm">
+            <DIV class="col-md-3">
+                <DIV class="stat-card bg-red shadow-sm">
                     Faulty: {{ faulty }}
-                </div>
-            </div>
+                </DIV>
+            </DIV>
 
-        </div>
+        </DIV>
 
         <!-- SEARCH + FILTER -->
-        <div class="row mt-4 g-2">
+        <DIV class="row mt-4 g-2">
 
-            <div class="col-md-8">
+            <DIV class="col-md-8">
                 <input
                     type="text"
                     id="liveSearch"
                     class="form-control"
                     placeholder="Search Tracking No, S/N, or Agency..."
                 >
-            </div>
+            </DIV>
 
-            <div class="col-md-4">
+            <DIV class="col-md-4">
 
                 <select id="typeFilter" class="form-select">
 
@@ -145,9 +145,9 @@
 
                 </select>
 
-            </div>
+            </DIV>
 
-        </div>
+        </DIV>
 
         <!-- TABLE -->
         <table class="table mt-3 table-hover">
@@ -268,7 +268,7 @@
 
         </table>
 
-    </div>
+    </DIV>
 
     <!-- SEARCH FILTER SCRIPT -->
     <script>
