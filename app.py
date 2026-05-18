@@ -13,17 +13,12 @@ app.secret_key = 'jpkn_assets_tracking_final_2026'
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 
-# =========================
-# DB CONNECTION
-# =========================
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
 
 
-# =========================
-# INIT DB
-# =========================
 def init_db():
+
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -75,7 +70,6 @@ def init_db():
             );
         """)
 
-        # default admin
         cur.execute("SELECT * FROM users WHERE username='admin'")
         if not cur.fetchone():
             cur.execute("""
@@ -97,28 +91,37 @@ def init_db():
 init_db()
 
 
-# =========================
-# GET CURRENT USER (DB AUTHORITATIVE)
-# =========================
-def get_current_user():
-    if 'email' not in session:
-        return None
-
+def log_action(email, action, serial):
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-    cur.execute("SELECT * FROM users WHERE email=%s", (session['email'],))
-    user = cur.fetchone()
-
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO activity_logs (user_email, action, asset_serial)
+        VALUES (%s,%s,%s)
+    """, (email, action, serial))
+    conn.commit()
     cur.close()
     conn.close()
 
-    return user
+
+def log_access(email, action):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO access_logs (user_email, action)
+        VALUES (%s,%s)
+    """, (email, action))
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
-# =========================
-# LOGIN
-# =========================
+def generate_qr(data):
+    img = qrcode.make(data)
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode()
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
 
@@ -138,9 +141,12 @@ def login():
         conn.close()
 
         if user:
+            session['user'] = user['username']
             session['email'] = user['email']
-            session['username'] = user['username']
+            session['role'] = user['role']
+
             log_access(user['email'], "LOGIN")
+
             return redirect(url_for('index'))
 
         flash("Invalid login")
@@ -148,15 +154,10 @@ def login():
     return render_template("login.html")
 
 
-# =========================
-# INDEX
-# =========================
 @app.route('/')
 def index():
 
-    user = get_current_user()
-
-    if not user:
+    if 'user' not in session:
         return redirect(url_for('login'))
 
     conn = get_db_connection()
@@ -165,24 +166,31 @@ def index():
     cur.execute("SELECT * FROM assets ORDER BY id DESC")
     data = cur.fetchall()
 
+    total = len(data)
+    working = len([x for x in data if x['status'] == 'Working'])
+    maintenance = len([x for x in data if x['status'] == 'Maintenance'])
+    faulty = len([x for x in data if x['status'] == 'Faulty'])
+
     cur.close()
     conn.close()
 
-    return render_template("assets.html", data=data, user=user)
+    return render_template(
+        "assets.html",
+        data=data,
+        total=total,
+        working=working,
+        maintenance=maintenance,
+        faulty=faulty
+    )
 
 
-# =========================
-# ADMIN (STRICT DB CHECK)
-# =========================
 @app.route('/admin')
 def admin():
 
-    user = get_current_user()
-
-    if not user:
+    if 'user' not in session:
         return redirect(url_for('login'))
 
-    if user['role'] != 'admin':
+    if session.get('role') != 'admin':
         return redirect(url_for('index'))
 
     conn = get_db_connection()
@@ -192,31 +200,26 @@ def admin():
     users = cur.fetchall()
 
     cur.execute("SELECT * FROM access_logs ORDER BY created_at DESC LIMIT 20")
-    logs = cur.fetchall()
+    access_logs = cur.fetchall()
 
     cur.close()
     conn.close()
 
-    return render_template("admin.html", users=users, access_logs=logs, user=user)
+    return render_template("admin.html", users=users, access_logs=access_logs)
 
 
-# =========================
-# ADD USER
-# =========================
 @app.route('/add_user', methods=['POST'])
 def add_user():
 
-    user = get_current_user()
-
-    if not user or user['role'] != 'admin':
-        return redirect(url_for('login'))
+    if session.get('role') != 'admin':
+        return redirect(url_for('index'))
 
     conn = get_db_connection()
     cur = conn.cursor()
 
     try:
         cur.execute("""
-            INSERT INTO users (username, email, password, role)
+            INSERT INTO users (username,email,password,role)
             VALUES (%s,%s,%s,%s)
         """, (
             request.form['username'],
@@ -229,7 +232,7 @@ def add_user():
 
     except Exception:
         conn.rollback()
-        flash("Error creating user")
+        flash("User already exists or invalid data!")
 
     finally:
         cur.close()
@@ -238,16 +241,11 @@ def add_user():
     return redirect(url_for('admin'))
 
 
-# =========================
-# DELETE USER
-# =========================
 @app.route('/delete_user/<int:id>', methods=['POST'])
 def delete_user(id):
 
-    user = get_current_user()
-
-    if not user or user['role'] != 'admin':
-        return redirect(url_for('login'))
+    if session.get('role') != 'admin':
+        return redirect(url_for('index'))
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -261,9 +259,25 @@ def delete_user(id):
     return redirect(url_for('admin'))
 
 
-# =========================
-# LOGOUT
-# =========================
+@app.route('/activity')
+def activity():
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur.execute("""
+        SELECT * FROM activity_logs
+        ORDER BY created_at DESC
+    """)
+
+    logs = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template("activity.html", logs=logs)
+
+
 @app.route('/logout')
 def logout():
 
@@ -272,23 +286,6 @@ def logout():
 
     session.clear()
     return redirect(url_for('login'))
-
-
-# =========================
-# LOG FUNCTIONS
-# =========================
-def log_access(email, action):
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO access_logs (user_email, action)
-        VALUES (%s,%s)
-    """, (email, action))
-
-    conn.commit()
-    cur.close()
-    conn.close()
 
 
 if __name__ == "__main__":
