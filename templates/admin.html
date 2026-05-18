@@ -21,37 +21,39 @@
             USER MANAGEMENT
         </h3>
 
-        <div>
+        <div class="d-flex gap-2">
 
             <a href="/"
                class="btn btn-primary btn-sm">
-
                Asset System
+            </a>
 
+            <a href="/admin"
+               class="btn btn-success btn-sm">
+               Active Assets
+            </a>
+
+            <a href="/admin?show_deleted=true"
+               class="btn btn-dark btn-sm">
+               Deleted Assets
             </a>
 
             <a href="/logout"
                class="btn btn-danger btn-sm">
-
                Logout
-
             </a>
 
         </div>
 
     </div>
 
-    <!-- FLASH MESSAGE -->
+    <!-- FLASH -->
     {% with messages = get_flashed_messages() %}
         {% if messages %}
             {% for m in messages %}
-
-            <div class="alert alert-info">
-
-                {{ m }}
-
-            </div>
-
+                <div class="alert alert-info">
+                    {{ m }}
+                </div>
             {% endfor %}
         {% endif %}
     {% endwith %}
@@ -60,60 +62,38 @@
     <div class="card mb-4">
 
         <div class="card-header fw-bold">
-
             Add Staff Account
-
         </div>
 
         <div class="card-body">
 
-            <form method="POST"
-                  action="/add_user">
+            <form method="POST" action="/add_user">
 
                 <div class="mb-3">
-
-                    <label>
-                        Staff Username
-                    </label>
-
-                    <input type="text"
-                           name="username"
-                           class="form-control"
-                           required>
-
+                    <label>Username</label>
+                    <input type="text" name="username" class="form-control" required>
                 </div>
 
                 <div class="mb-3">
-
-                    <label>
-                        Staff Email
-                    </label>
-
-                    <input type="email"
-                           name="email"
-                           class="form-control"
-                           placeholder="example@gmail.com"
-                           required>
-
+                    <label>Email</label>
+                    <input type="email" name="email" class="form-control" required>
                 </div>
 
                 <div class="mb-3">
+                    <label>Password</label>
+                    <input type="text" name="password" class="form-control" required>
+                </div>
 
-                    <label>
-                        Password
-                    </label>
-
-                    <input type="text"
-                           name="password"
-                           class="form-control"
-                           required>
-
+                <div class="mb-3">
+                    <label>Role</label>
+                    <select name="role" class="form-select">
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
                 </div>
 
                 <button class="btn btn-success">
-
                     Add User
-
                 </button>
 
             </form>
@@ -126,17 +106,14 @@
     <table class="table table-bordered table-hover">
 
         <thead class="table-dark">
-
             <tr>
-
                 <th>ID</th>
                 <th>Username</th>
                 <th>Email</th>
+                <th>Role</th>
                 <th>Password</th>
                 <th>Action</th>
-
             </tr>
-
         </thead>
 
         <tbody>
@@ -146,10 +123,16 @@
             <tr>
 
                 <td>{{ user.id }}</td>
-
                 <td>{{ user.username }}</td>
-
                 <td>{{ user.email }}</td>
+
+                <td>
+                    {% if user.role == 'admin' %}
+                        <span class="badge bg-danger">ADMIN</span>
+                    {% else %}
+                        <span class="badge bg-secondary">USER</span>
+                    {% endif %}
+                </td>
 
                 <td>{{ user.password }}</td>
 
@@ -157,15 +140,10 @@
 
                     {% if user.username != 'admin' %}
 
-                    <form method="POST"
-                          action="/delete_user/{{ user.id }}">
-
+                    <form method="POST" action="/delete_user/{{ user.id }}">
                         <button class="btn btn-danger btn-sm">
-
                             Delete
-
                         </button>
-
                     </form>
 
                     {% endif %}
@@ -180,63 +158,58 @@
 
     </table>
 
-    <!-- ACCESS LOG -->
     <hr class="my-5">
 
+    <!-- DELETED ASSETS -->
     <h4 class="fw-bold mb-3">
-
-        User Access Log
-
+        Asset Records (Active / Deleted)
     </h4>
 
     <table class="table table-bordered table-hover">
 
         <thead class="table-dark">
-
             <tr>
-
-                <th>ID</th>
-                <th>User Email</th>
+                <th>Tracking No</th>
+                <th>Serial</th>
+                <th>Status</th>
+                <th>State</th>
                 <th>Action</th>
-                <th>Time</th>
-
             </tr>
-
         </thead>
 
         <tbody>
 
-            {% for log in access_logs %}
+            {% for asset in assets %}
 
             <tr>
 
-                <td>{{ log.id }}</td>
+                <td>{{ asset.tracking_number }}</td>
+                <td>{{ asset.serial_number }}</td>
+                <td>{{ asset.status }}</td>
 
-                <td>{{ log.user_email }}</td>
+                <td>
+                    {% if asset.is_deleted %}
+                        <span class="badge bg-danger">DELETED</span>
+                    {% else %}
+                        <span class="badge bg-success">ACTIVE</span>
+                    {% endif %}
+                </td>
 
                 <td>
 
-                    {% if log.action == 'LOGIN' %}
+                    {% if asset.is_deleted %}
 
-                        <span class="badge bg-success">
-
-                            LOGIN
-
-                        </span>
+                    <form method="POST" action="/restore/{{ asset.id }}">
+                        <button class="btn btn-success btn-sm">
+                            Restore
+                        </button>
+                    </form>
 
                     {% else %}
-
-                        <span class="badge bg-danger">
-
-                            LOGOUT
-
-                        </span>
-
+                        <span class="text-muted">No action</span>
                     {% endif %}
 
                 </td>
-
-                <td>{{ log.created_at }}</td>
 
             </tr>
 
